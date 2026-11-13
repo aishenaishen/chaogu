@@ -204,7 +204,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v3.0.1</span>
+    <span class="ver">v3.1.0</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -378,6 +378,15 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
       <button class="btn warn" id="gmDown">砸盘</button>
       <input class="inp w" id="gmPrice" type="number" step="0.01" placeholder="指定价">
       <button class="btn" id="gmSetPrice">改价</button>
+    </div>
+    <div class="srow"><label>数值</label>
+      <span class="shint">股数</span>
+      <input class="inp w" id="gmFloat" type="number" step="0.5" min="0.1"><span class="shint">万股</span>
+      <span class="shint">信心</span>
+      <input class="inp w" id="gmTrust" type="number" step="1" min="0" max="100">
+      <span class="shint">拥挤</span>
+      <input class="inp w" id="gmCrowd" type="number" step="1" min="0" max="100">
+      <button class="btn dark" id="gmSetStats">写入</button>
     </div>
 
     <div class="sep"></div>
@@ -655,10 +664,9 @@ async function loadMarket() {
   }
 }
 
-const hasStocks = m => !!(m && m.stocks && STOCKS.every(s => {
+const hasStocks = m => !!(m && m.stocks && Number(m.econ) === 27 && STOCKS.every(s => {
   const q = m.stocks[s.id];
-  // float 对不上说明是旧经济（每股 24.8、一手 100 股那套），必须重建
-  return q && typeof q.price === "number" && Number(q.float) === Number(s.float);
+  return q && typeof q.price === "number" && Number(q.float) > 0;
 }));
 
 function cleanAcc(a) {
@@ -1073,6 +1081,11 @@ function gmSync() {
   const st = mkt.stocks[s.id];
   $("#gmHaltState").textContent = st && st.halt ? "停牌中" : "正常交易";
   $("#gmPrice").placeholder = st ? fmt(st.price, s.dp) : "指定价";
+  if (st) {
+    if (document.activeElement !== $("#gmFloat")) $("#gmFloat").value = (Number(st.float || 0) / 10000).toFixed(1);
+    if (document.activeElement !== $("#gmTrust")) $("#gmTrust").value = Math.round(Number(st.trust ?? 50));
+    if (document.activeElement !== $("#gmCrowd")) $("#gmCrowd").value = Math.round(Number(st.crowd ?? 50));
+  }
 
   $("#evlist").innerHTML = (mkt.events || []).length
     ? mkt.events.map(e => {
@@ -1321,6 +1334,22 @@ $("#gmLimit").onclick = async () => {
 };
 $("#gmUp").onclick = () => shockPct(1);
 $("#gmDown").onclick = () => shockPct(-1);
+$("#gmSetStats").onclick = async () => {
+  const s = stockById($("#gmStock").value || pid);
+  const fw = Number($("#gmFloat").value);       // 万股
+  const tr = Number($("#gmTrust").value);
+  const cr = Number($("#gmCrowd").value);
+  await applyMarket(m => {
+    const st = m.stocks[s.id];
+    if (!st) return m;
+    if (Number.isFinite(fw) && fw > 0) st.float = Math.round(fw * 10000);
+    if (Number.isFinite(tr)) st.trust = Math.max(0, Math.min(100, tr));
+    if (Number.isFinite(cr)) st.crowd = Math.max(0, Math.min(100, cr));
+    return m;
+  });
+  SFX.ok(); toast(s.name + "：股数/信心/拥挤已写入。");
+  gmSync();
+};
 $("#gmSetPrice").onclick = () => {
   const s = stockById($("#gmStock").value), v = Number($("#gmPrice").value);
   if (!(v > 0)) return toast("先填一个正的价格。");

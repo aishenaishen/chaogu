@@ -563,7 +563,7 @@ export function newMarket() {
     prevClose[s.id] = q;
   }
   const m = {
-    v: 4, tick: 0, running: true, vol: 1, autoNews: true, speed: TICK_MS, limit: true,
+    v: 5, econ: 27, tick: 0, running: true, vol: 1, autoNews: true, speed: TICK_MS, limit: true,
     news: "", newsLeft: 0, events: [], stocks, steppedAt: Date.now()
   };
   m.index = indexOf(m); m.indexPrev = m.index;
@@ -579,6 +579,7 @@ export function stepMarket(m) {
   const events = [];
   const finished = [];
   const driftN = {}, driftF = {};
+  const crowdTarget = {};   // 事件持续期间，把拥挤度往这个值拉
   for (const e of (m.events || [])) {
     const total = Math.max(1, Number(e.ticks) || 1);
     let left = Number(e.left);
@@ -587,6 +588,11 @@ export function stepMarket(m) {
     const bucket = e.free ? driftF : driftN;
     for (const id in (e.imp || {})) {
       bucket[id] = (bucket[id] || 0) + logDrift(e.imp[id], total);
+    }
+    // 事件的拥挤冲击不再是一次性的：整段事件期间持续把拥挤度往目标拉
+    if (e.crowd) {
+      const tgt = Math.max(0, Math.min(100, CROWD_NEUTRAL + Number(e.crowd) * 0.9));
+      for (const id in (e.imp || {})) crowdTarget[id] = tgt;
     }
     if (left > 0) events.push({ ...e, ticks: total, left });
     else if (e.free) finished.push({ ...e, total });
@@ -611,10 +617,12 @@ export function stepMarket(m) {
     if (!Number.isFinite(st.price) || st.price <= 0) st.price = s.p0;
     if (!Number.isFinite(st.prevClose) || st.prevClose <= 0) st.prevClose = st.price;
 
-    // 拥挤度：玩家净买入推高、每跳自然回落；拥挤带来溢价，也放大波动
+    // 拥挤度：玩家净买入推高；没有外力时缓慢回落到 50；事件期间被拉向事件目标
     const flow = Number(st.flow) || 0;
     let crowd = Number.isFinite(Number(st.crowd)) ? Number(st.crowd) : CROWD_NEUTRAL;
-    crowd = Math.max(0, Math.min(100, crowd + (flow / LOT) * 0.8 - 0.35));
+    crowd += (CROWD_NEUTRAL - crowd) * 0.004 + (flow / LOT) * 0.8;
+    if (crowdTarget[s.id] != null) crowd += (crowdTarget[s.id] - crowd) * 0.05;
+    crowd = Math.max(0, Math.min(100, crowd));
 
     if (st.halt) {
       stocks[s.id] = { ...st, crowd, flow: 0, bt: (st.bt || 0) + 1 };
