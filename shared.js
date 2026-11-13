@@ -108,12 +108,14 @@ export function stepMarket(m) {
   const events = [];
   const drift = {};
   for (const e of (m.events || [])) {
-    const left = (e.left ?? e.ticks ?? 1) - 1;
-    const total = e.ticks || 1;
+    const total = Math.max(1, Number(e.ticks) || 1);
+    let left = Number(e.left);
+    if (!Number.isFinite(left)) left = total;
+    left -= 1;
     for (const id in (e.imp || {})) {
-      drift[id] = (drift[id] || 0) + (e.imp[id] / 100) / total;
+      drift[id] = (drift[id] || 0) + (Number(e.imp[id]) / 100) / total;
     }
-    if (left > 0) events.push({ ...e, left });
+    if (left > 0) events.push({ ...e, ticks: total, left });
   }
 
   let news = m.news || "", newsLeft = Math.max(0, (m.newsLeft || 0) - 1);

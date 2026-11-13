@@ -31,7 +31,9 @@ OBR.onReady(async () => {
         const wait = clampSpeed(cur.speed);
         const stamp = cur.steppedAt || 0;
         if (Date.now() - stamp >= wait + GRACE_MS) {
-          await OBR.room.setMetadata({ [MKT_KEY]: stepMarket(cur) });
+          const next = stepMarket(cur);
+          next.lastBy = "后台";
+          await OBR.room.setMetadata({ [MKT_KEY]: next });
         }
       }
     } catch (e) { /* 下一轮再试 */ }

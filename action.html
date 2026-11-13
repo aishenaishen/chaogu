@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -184,7 +184,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v2.0.6</span>
+    <span class="ver">v2.0.7</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -350,8 +350,11 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
       <input class="inp w" id="gmEvPct" type="number" value="-5" step="1"><span class="shint">%</span>
       <input class="inp w" id="gmEvTicks" type="number" value="6" step="1" min="1"><span class="shint">跳</span>
       <button class="btn" id="gmEvAdd">加入事件</button>
+      <button class="btn" id="gmEvClear">清空事件</button>
+      <button class="btn" id="gmEvStep">推一拍</button>
     </div>
     <div class="evlist" id="evlist"></div>
+    <div class="shint" id="gmDbg"></div>
 
     <div class="srow" style="justify-content:flex-end;margin-top:14px">
       <button class="btn dark" id="gmClose">关闭</button>
@@ -775,8 +778,10 @@ function gmSync() {
   $("#gmPrice").placeholder = st ? fmt(st.price, s.dp) : "指定价";
 
   $("#evlist").innerHTML = (mkt.events || []).length
-    ? mkt.events.map(e => `<div class="evrow"><span class="en">${e.title}</span><span class="el">还剩 ${e.left ?? e.ticks} 跳</span></div>`).join("")
+    ? mkt.events.map(e => `<div class="evrow"><span class="en">${e.title}</span><span class="el">还剩 ${Math.max(0, Math.round(Number(e.left ?? e.ticks) || 0))}/${Math.max(1, Math.round(Number(e.ticks) || 1))} 跳</span></div>`).join("")
     : `<div class="shint">当前没有进行中的事件。</div>`;
+  const dbg = $("#gmDbg");
+  if (dbg) dbg.textContent = `tick ${mkt.tick || 0} · 事件 ${(mkt.events || []).length} 条 · 行情${mkt.running === false ? "已暂停" : "在跑"} · 最近推进：${mkt.lastBy || "未知"}`;
 }
 
 async function refreshPlayers() {
@@ -928,6 +933,14 @@ $("#gmEvAdd").onclick = () => {
   $("#gmEvTitle").value = ""; $("#gmEvDesc").value = "";
   $("#gmStocksChips").querySelectorAll(".chip").forEach(b => b.classList.remove("on"));
 };
+$("#gmEvClear").onclick = () => {
+  applyMarket(m => { m.events = []; m.news = ""; m.newsLeft = 0; return m; });
+  toast("已清空进行中的事件。");
+};
+$("#gmEvStep").onclick = () => {
+  applyMarket(m => { const n = stepMarket(m); n.lastBy = "手动"; return n; });
+  toast("已手动推一拍。");
+};
 $("#giveAllGo").onclick = async () => {
   const delta = Number($("#giveAll").value) || 0;
   for (const p of players) {
@@ -995,7 +1008,7 @@ async function connect() {
     const beat = $("#gmBeat");
     if (!beat) return;
     const idle = Date.now() - (mkt.steppedAt || 0);
-    beat.textContent = mkt.steppedAt ? `· 最后推进 ${Math.max(0, Math.round(idle / 1000))} 秒前` : "";
+    beat.textContent = mkt.steppedAt ? `· 最后推进 ${Math.max(0, Math.round(idle / 1000))} 秒前（${mkt.lastBy || "未知"}）` : "";
   }, 1000);
 
   toast("已连上 Owlbear，行情由你的面板推进（关掉面板后由后台接手）。");
@@ -1009,7 +1022,7 @@ function updateDriver() {
   driverTimer = setTimeout(async () => {
     const due = Date.now() - (mkt.steppedAt || 0) >= sp - 100;
     if (mkt.running !== false && due) {
-      try { await applyMarket(m => stepMarket(m)); } catch (e) { /* 下一拍再试 */ }
+      try { await applyMarket(m => { const n = stepMarket(m); n.lastBy = "面板"; return n; }); } catch (e) { /* 下一拍再试 */ }
     }
     updateDriver();
   }, sp);
