@@ -84,16 +84,26 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
 .cright{text-align:right}
 .cprice{font-size:27px;font-weight:700;letter-spacing:-.6px;font-variant-numeric:tabular-nums;line-height:1.1}
 .cchg{font-size:12px;font-variant-numeric:tabular-nums}
+.cstats.cfloat{margin-top:-4px;font-size:10.5px;color:#8a978f}
 .cstats{display:flex;gap:18px;flex-wrap:wrap;margin:9px 0 8px;padding:7px 10px;border-radius:10px;
   background:#f7f8f4;font-size:11px;color:#7b8d86;flex:none}
 .cstats b{color:#33463e;font-weight:600;font-variant-numeric:tabular-nums}
 #chartbox{flex:1;min-height:190px;position:relative;border-radius:12px;overflow:hidden;background:#18222c}
 #chart{display:block;width:100%;height:100%}
-.evbar{flex:none;display:flex;align-items:center;gap:8px;margin-top:9px;padding:7px 10px;border-radius:10px;
-  background:#fdf6e6;border:1px solid #f1e2c0;font-size:11.5px;color:#7a6228;min-height:32px}
-.evbar .evtag{font-size:9.5px;font-weight:700;color:#fff;background:#c8a253;border-radius:4px;padding:1px 6px;flex:none}
-.evbar.news{background:#eef7f1;border-color:#d5ecdd;color:#3f6b55}
-.evbar.news .evtag{background:#5c9c7d}
+.evbar{flex:none;display:flex;flex-direction:column;gap:6px;margin-top:9px}
+.evrow{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:10px;font-size:11.5px;min-height:32px;
+  background:#f4f7f5;border:1px solid #e4ebe7;color:#5d6f66}
+.evrow .evtag{font-size:9.5px;font-weight:700;color:#fff;background:#9aa8a1;border-radius:4px;padding:1px 6px;flex:none}
+.evrow .evtxt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.evrow.news{background:#eef7f1;border-color:#d5ecdd;color:#3f6b55}
+.evrow.news .evtag{background:#5c9c7d}
+.evrow.gm{background:linear-gradient(90deg,#7a1f1f,#a8342a);border-color:#8c2b22;color:#fff8ef;
+  box-shadow:0 6px 18px rgba(150,40,30,.28);font-weight:700;animation:gmpulse 2.2s ease-in-out infinite}
+.evrow.gm .evtag{background:#ffd9a8;color:#7a1f1f}
+.evrow.gm .evleft{flex:none;font-weight:700;font-size:10.5px;background:rgba(0,0,0,.25);border-radius:20px;padding:2px 8px}
+.evrow.gm .evsub{display:none}
+.evrow.gm .evtxt{white-space:normal;line-height:1.35;max-height:3.6em;overflow:hidden}
+@keyframes gmpulse{0%,100%{box-shadow:0 6px 18px rgba(150,40,30,.28)}50%{box-shadow:0 6px 26px rgba(255,120,80,.55)}}
 
 .side{display:flex;flex-direction:column;gap:11px;min-height:0}
 .order{padding:14px 16px 15px}
@@ -189,7 +199,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v2.6.1</span>
+    <span class="ver">v2.7.1</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -223,7 +233,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
           <div class="ic" id="idxChg">+0.00%</div>
         </div>
         <div id="stocks"></div>
-        <div class="whint">红涨绿跌。每手 100 股，佣金 0.055%，最低 5 金。</div>
+        <div class="whint">红涨绿跌。每手 10 股，佣金 1%，最低 1 银（0.1 金）。</div>
       </aside>
 
       <section class="card chartcard">
@@ -245,15 +255,30 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
           <span>成交 <b id="cVol">—</b></span>
           <span>拥挤 <b id="cCrowd">—</b></span>
         </div>
+        <div class="cstats cfloat">
+          <span>流通 <b id="cFloat">—</b></span>
+          <span>市面可卖 <b id="cFree">—</b></span>
+          <span>按现价买光 <b id="cCost">—</b></span>
+        </div>
         <div id="chartbox"><canvas id="chart"></canvas></div>
-        <div class="evbar" id="evbar"><span class="evtag">快讯</span><span id="evtext">牌价平稳，等城主发话。</span></div>
+        <div class="evbar" id="evbar">
+          <div class="evrow gm" id="evGm" hidden>
+            <span class="evtag">城主事件</span>
+            <span class="evtxt" id="evGmText"></span>
+            <span class="evleft" id="evGmLeft"></span>
+          </div>
+          <div class="evrow news" id="evNews">
+            <span class="evtag">快讯</span>
+            <span class="evtxt" id="evtext">牌价平稳，等城主发话。</span>
+          </div>
+        </div>
       </section>
 
       <aside class="side">
         <section class="card order">
           <div class="ot">TRADE</div>
           <div class="oh">买卖</div>
-          <div class="field"><label>数量</label><input id="qty" type="number" value="100" min="100" step="100"><span class="unit">股</span></div>
+          <div class="field"><label>数量</label><input id="qty" type="number" value="10" min="10" step="10"><span class="unit">股</span></div>
           <div class="quick">
             <button data-q="100">1 手</button>
             <button data-q="500">5 手</button>
@@ -296,9 +321,9 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="srow"><label>玩家资金</label><span class="shint">直接改可用资金，改完立刻生效</span></div>
     <div class="plist" id="plist"><div class="shint">读取玩家列表中…</div></div>
     <div class="srow"><label></label>
-      <input class="inp w" id="giveAll" type="number" value="5000" step="500">
+      <input class="inp w" id="giveAll" type="number" value="300" step="50">
       <button class="btn" id="giveAllGo">给所有玩家发钱</button>
-      <span class="shint">一手 100 股约 600～3,100 金，负数就是扣钱</span>
+      <span class="shint">一手 10 股约 8～64 金，负数就是扣钱</span>
     </div>
 
     <div class="sep"></div>
@@ -385,7 +410,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
   <div class="sheet" style="width:560px">
     <h3>怎么玩</h3>
     <div class="sub">深水城六方产业在交易所挂牌，红涨绿跌，涨跌停 ±10%。</div>
-    <div class="srow"><label>玩家</label><span class="shint">左侧选股票 → 右侧填股数（1 手 = 100 股）→ 买入 / 卖出。T+1：卖出后 6 跳钱才到账。佣金 0.055%，最低 5 金。</span></div>
+    <div class="srow"><label>玩家</label><span class="shint">左侧选股票 → 右侧填股数（1 手 = 10 股）→ 买入 / 卖出。T+1：卖出后 6 跳钱才到账。佣金 1%，最低 1 银。</span></div>
     <div class="srow"><label></label><span class="shint">看跌就「买跌」：押 50% 押金，跌了赚、涨了亏，押金亏光自动平仓。</span></div>
     <div class="srow"><label></label><span class="shint">账户里的钱由城主发放。亏了不是爆仓，是欠了城里某位债主的钱。</span></div>
     <div class="sep"></div>
@@ -477,8 +502,34 @@ function toast(msg) {
 }
 const money = v => (v < 0 ? "-" : "") + Math.abs(v).toLocaleString("en-US",
   { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const sharesTxt = v => { const n = Number(v) || 0; return n >= 1e8 ? (n / 1e8).toFixed(2) + " 亿股" : n >= 1e4 ? ((n / 1e4) % 1 === 0 ? (n / 1e4) : (n / 1e4).toFixed(2)) + " 万股" : Math.round(n) + " 股"; };
+const moneyShort = v => { const n = Number(v) || 0; return n >= 1e8 ? (n / 1e8).toFixed(2) + " 亿" : n >= 1e4 ? (n / 1e4).toFixed(1) + " 万" : money(n); };
+let heldMap = {};
+function freeFloat(id) {
+  const st = mkt && mkt.stocks && mkt.stocks[id], def = stockById(id);
+  const total = Number(st && st.float) || Number(def && def.float) || 0;
+  return Math.max(0, total - (heldMap[id] || 0));
+}
+async function refreshHeld() {
+  try {
+    const map = {};
+    if (!DEMO && OBR) {
+      const md = await OBR.room.getMetadata();
+      const all = md[ACC_KEY] || {};
+      for (const a of Object.values(all.players || {})) {
+        for (const [id, p] of Object.entries((a && a.positions) || {})) {
+          if (p && p.shares > 0) map[id] = (map[id] || 0) + p.shares;
+        }
+      }
+    } else {
+      for (const [id, p] of Object.entries(acc.positions || {})) if (p.shares > 0) map[id] = p.shares;
+    }
+    heldMap = map;
+    if (typeof render === "function") render();
+  } catch (e) { /* 读不到就按 0 算 */ }
+}
 const pct = v => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
-const volTxt = v => Math.round(v / 100).toLocaleString("en-US") + " 手";
+const volTxt = v => Math.round(v / LOT).toLocaleString("en-US") + " 手";
 const crowdLabel = v => {
   const n = Math.round(Number(v) || CROWD_NEUTRAL);
   return n + (n >= 75 ? " 烫" : n >= 60 ? " 热" : n <= 25 ? " 冷" : "");
@@ -490,7 +541,7 @@ const QS = new URLSearchParams(location.search);
 const isEmbedded = (() => { try { return window.parent !== window; } catch (e) { return true; } })();
 const FORCE_DEMO = QS.has("demo");
 const FORCE_OBR = QS.has("obr");
-const DEMO_CASH = 5000;   // 试算模式的开局资金：够买 1~7 手
+const DEMO_CASH = 300;    // 试算模式的开局资金：够买 4~30 手
 
 let OBR = window.__OBR_SDK || null;
 
@@ -700,6 +751,11 @@ function render() {
     : `<b>0</b> 股 · 成本 <b>—</b>`;
   $("#pPending").textContent = money(pendingTotal(acc));
   $("#cCrowd").textContent = crowdLabel(st.crowd);
+  const totalF = Number(st.float) || s.float || 0;
+  const freeF = Math.max(0, totalF - (heldMap[pid] || 0));
+  $("#cFloat").textContent = sharesTxt(totalF);
+  $("#cFree").textContent = sharesTxt(freeF);
+  $("#cCost").textContent = moneyShort(freeF * st.price) + " 金";
   $("#btnClose").disabled = !pos;
   $("#btnClose").textContent = short ? "一键平空" : "清仓";
   $("#btnBuy").textContent = short ? "平空（买回）" : "买入";
@@ -708,18 +764,39 @@ function render() {
   $("#btnShort").disabled = !!st.halt || short || (!!pos && pos.shares > 0);
   $("#btnShort").textContent = short ? "空单持有中" : "买跌";
 
-  const lastEv = mkt.events && mkt.events.length ? mkt.events[mkt.events.length - 1] : null;
-  const evbar = $("#evbar");
-  if (lastEv) {
-    evbar.classList.remove("news");
-    const sub = lastEv.desc && lastEv.desc !== lastEv.title ? " · " + lastEv.desc : "";
-    evbar.innerHTML = `<span class="evtag">事件</span><span>${lastEv.title}${sub}</span>`;
-  } else if (mkt.news) {
-    evbar.classList.add("news");
-    evbar.innerHTML = `<span class="evtag">快讯</span><span>${mkt.news}</span>`;
+  // 城主事件单独一条，排在最上面；随机快讯在下面一条，永远挤不掉它
+  const evs = Array.isArray(mkt.events) ? mkt.events : [];
+  const gmEvs = evs.filter(e => e && e.free);
+  const gmRow = $("#evGm");
+  if (gmEvs.length) {
+    const ev = gmEvs[gmEvs.length - 1];
+    const left = Math.max(0, Number(ev.left) || 0);
+    const total = Math.max(1, Number(ev.ticks) || 1);
+    const sub = ev.desc && ev.desc !== ev.title ? " · " + ev.desc : "";
+    const more = gmEvs.length > 1 ? `（另有 ${gmEvs.length - 1} 条）` : "";
+    $("#evGmText").textContent = ev.title + sub + more;
+    $("#evGmLeft").textContent = `还剩 ${left}/${total} 跳`;
+    gmRow.hidden = false;
   } else {
-    evbar.classList.remove("news");
-    evbar.innerHTML = `<span class="evtag">快讯</span><span>牌价平稳，等城主发话。</span>`;
+    gmRow.hidden = true;
+  }
+  const restEv = evs.filter(e => e && !e.free);
+  const newsRow = $("#evNews");
+  const gmActive = gmEvs.length > 0;
+  const newsDup = gmActive && mkt.news && gmEvs.some(e => mkt.news.includes(e.title));
+  if (mkt.news && !newsDup) {
+    newsRow.className = "evrow news";
+    $("#evtext").textContent = mkt.news;
+  } else if (gmActive) {
+    newsRow.className = "evrow";
+    $("#evtext").textContent = "市场传闻四起，先看城主事件。";
+  } else if (restEv.length) {
+    const ev = restEv[restEv.length - 1];
+    newsRow.className = "evrow";
+    $("#evtext").textContent = ev.title + (ev.desc && ev.desc !== ev.title ? " · " + ev.desc : "");
+  } else {
+    newsRow.className = "evrow news";
+    $("#evtext").textContent = "牌价平稳，等城主发话。";
   }
 
   calc();
@@ -839,20 +916,21 @@ async function trade(action) {
   const st = mkt.stocks[pid], s = stockById(pid);
   if (st.halt) return toast("停牌中，等城主复牌。");
   const shares = normalizeShares($("#qty").value);
-  if (!shares) return toast("至少 1 手（100 股）。");
+  if (!shares) return toast("至少 1 手（10 股）。");
   const amount = shares * st.price, fee = feeOf(amount);
   const pos = acc.positions[pid];
   const free = acc.cash - marginUsed(acc);
 
   if (action === "buy") {
     if (pos && pos.shares < 0) return toast("手上还有空单，先平空再买入。");
+    if (shares > freeFloat(pid)) return toast("市面可卖的只有 " + sharesTxt(freeFloat(pid)) + "，买不了这么多。");
     if (amount + fee > free) return toast("可用资金不够（含佣金 " + money(fee) + "，融券保证金占用 " + money(marginUsed(acc)) + "）。");
     acc.cash -= amount + fee;
     const p = pos || { shares: 0, cost: 0 };
     p.cost = (p.cost * p.shares + amount + fee) / (p.shares + shares);
     p.shares += shares;
     acc.positions[pid] = p;
-    await saveAcc(); render();
+    await saveAcc(); render(); refreshHeld();
     await noteFlow(shares);
     SFX.buy(); return toast("买入 " + shares + " 股 · 佣金 " + money(fee));
   }
@@ -865,7 +943,7 @@ async function trade(action) {
     acc.realized += (st.price - pos.cost) * shares - fee;
     pos.shares -= shares;
     if (pos.shares === 0) delete acc.positions[pid];
-    await saveAcc(); render();
+    await saveAcc(); render(); refreshHeld();
     await noteFlow(-shares);
     SFX.sell(); return toast("卖出 " + shares + " 股 · " + money(net) + " 金 " + SETTLE_TICKS + " 跳后到账");
   }
@@ -879,7 +957,7 @@ async function trade(action) {
     p.cost = (p.cost * (-p.shares) + amount) / (-p.shares + shares);
     p.shares -= shares;
     acc.positions[pid] = p;
-    await saveAcc(); render();
+    await saveAcc(); render(); refreshHeld();
     await noteFlow(-shares);
     SFX.short(); return toast("买跌 " + shares + " 股 · 押金 " + money(margin) + " · 跌了赚，涨了亏");
   }
@@ -892,7 +970,7 @@ async function trade(action) {
   acc.realized += pnl;
   pos.shares += shares;
   if (pos.shares === 0) delete acc.positions[pid];
-  await saveAcc(); render();
+  await saveAcc(); render(); refreshHeld();
   await noteFlow(shares);
   SFX.cover(); toast("平空 " + shares + " 股 · " + (pnl >= 0 ? "赚 " : "亏 ") + money(Math.abs(pnl)));
 }
@@ -915,7 +993,7 @@ async function checkMargin() {
     notes.push(stockById(id).name + " " + n + " 股（" + (pnl >= 0 ? "赚 " : "亏 ") + money(Math.abs(pnl)) + "）");
   }
   if (!changed) return;
-  await saveAcc(); render();
+  await saveAcc(); render(); refreshHeld();
   SFX.alarm(); toast("保证金不足，已强制平空：" + notes.join("；"));
 }
 
@@ -935,7 +1013,7 @@ async function closeAll() {
   }
   acc.realized += pnl;
   delete acc.positions[pid];
-  await saveAcc(); render();
+  await saveAcc(); render(); refreshHeld();
   await noteFlow(pos.shares > 0 ? -n : n);
   if (pos && pos.shares > 0) SFX.sell(); else SFX.cover(); toast((pos.shares > 0 ? "已卖出，钱 " + SETTLE_TICKS + " 跳后到账" : "已平空") + " · 佣金 " + money(fee));
 }
@@ -997,7 +1075,7 @@ async function refreshPlayers() {
   $("#plist").innerHTML = players.map(p => {
     const bal = DEMO ? acc.cash : (all.players?.[p.id]?.cash || 0);
     return `<div class="prow"><span class="pn">${p.name}${p.role === "GM" ? "（GM）" : ""}</span>
-      <input type="number" data-pid="${p.id}" value="${bal.toFixed?.(2) ?? bal}" step="100">
+      <input type="number" data-pid="${p.id}" value="${bal.toFixed?.(2) ?? bal}" step="10">
       <button class="btn" data-set="${p.id}">设定</button></div>`;
   }).join("");
   $("#plist").querySelectorAll("[data-set]").forEach(b => {
@@ -1212,7 +1290,7 @@ async function bootDemo() {
   $("#accTag").textContent = "试算资金";
   isGM = !isEmbedded;
   $("#btnGM").style.display = isGM ? "" : "none";
-  await loadMarket(); await loadAcc(); render();
+  await loadMarket(); await loadAcc(); render(); refreshHeld();
   const demoTick = () => {
     if (mkt && mkt.running !== false) mkt = stepMarket(mkt);
     render();
@@ -1236,18 +1314,18 @@ async function connect() {
   const role = await OBR.player.getRole();
   isGM = role === "GM";
   $("#btnGM").style.display = isGM ? "" : "none";
-  await loadMarket(); await loadAcc(); render();
+  await loadMarket(); await loadAcc(); render(); refreshHeld();
   if (isGM) { gmSync(); refreshPlayers(); }
 
   OBR.room.onMetadataChange(md => {
     if (hasStocks(md[MKT_KEY])) { mkt = md[MKT_KEY]; render(); if (isGM) gmSync(); updateDriver(); checkMargin(); settleUp(); }
     if (md[ACC_KEY] && md[ACC_KEY].players?.[myId]) {
       const mine = cleanAcc(md[ACC_KEY].players[myId]);
-      if (JSON.stringify(mine) !== JSON.stringify(acc)) { acc = mine; render(); }
+      if (JSON.stringify(mine) !== JSON.stringify(acc)) { acc = mine; render(); refreshHeld(); }
     }
   });
   // 有人进出房间时刷新 GM 面板里的玩家列表
-  OBR.party.onChange(() => { if (isGM) refreshPlayers(); });
+  OBR.party.onChange(() => { refreshHeld(); if (isGM) refreshPlayers(); });
 
   // 谁推行情：GM 开着这块面板时，由面板自己按速度精确推进；
   // 面板关掉以后，background.html 发现「很久没跳」才会接手。

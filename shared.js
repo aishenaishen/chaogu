@@ -1,4 +1,4 @@
-// 金手指证券交易所 · 共享数据层
+﻿// 金手指证券交易所 · 共享数据层
 // 深水城五方势力各有「上市产业」。价格按随机游走 + 事件冲击推进。
 // 注意：字符串里不要出现未转义的英文双引号，否则整个模块语法错误。
 
@@ -11,9 +11,9 @@ export const SPEED_MIN = 1000;    // 最快 1 秒一跳
 export const SPEED_MAX = 60000;   // 最慢 60 秒一跳
 export const BAR_TICKS = 6;       // 6 跳 = 1 根 K
 export const MAX_BARS = 30;       // 保留 K 线根数
-export const FEE_RATE = 0.00055;  // 佣金 0.055%
-export const FEE_MIN = 5;         // 最低佣金 5 金
-export const LOT = 100;           // 一手 100 股
+export const FEE_RATE = 0.01;     // 佣金 1%（费伦的钱庄抽得狠）
+export const FEE_MIN = 0.1;       // 最低佣金 1 银
+export const LOT = 10;            // 一手 10 股（费伦的钱小，一手别太贵）
 export const LIMIT = 0.10;        // 涨跌停 ±10%
 export const TICKS_PER_DAY = 480; // 一天 480 跳
 export const SETTLE_TICKS = 6;    // 卖出后 6 跳（一根 K）才交收
@@ -21,12 +21,12 @@ export const CROWD_NEUTRAL = 50;  // 拥挤度中性值
 
 // ── 六个「上市产业」──────────────────────────────────────────────
 export const STOCKS = [
-  { id: "KSLT", code: "600101", name: "卡萨兰特银行", sector: "金融", p0: 24.80, dp: 2, vol: 0.0058, drift: 0.00002 },
-  { id: "SNSA", code: "600102", name: "珊娜萨货运",   sector: "物流", p0: 9.35,  dp: 2, vol: 0.0170, drift: 0.00004 },
-  { id: "MNSN", code: "600103", name: "曼松商会",     sector: "贸易", p0: 17.60, dp: 2, vol: 0.0105, drift: 0.00001 },
-  { id: "JLRS", code: "600104", name: "贾拉索船务",   sector: "航运", p0: 6.72,  dp: 2, vol: 0.0190, drift: -0.00002 },
-  { id: "GLHD", code: "600105", name: "格拉汉德置业", sector: "地产", p0: 11.20, dp: 2, vol: 0.0135, drift: 0.00005 },
-  { id: "WDPA", code: "600106", name: "深水城港务",   sector: "公用", p0: 31.40, dp: 2, vol: 0.0068, drift: 0.00001 }
+  { id: "KSLT", code: "600101", name: "卡萨兰特银行", sector: "金融", p0: 6.40, dp: 2, vol: 0.0058, drift: 0.00002, float: 20000 },
+  { id: "SNSA", code: "600102", name: "珊娜萨货运",   sector: "物流", p0: 1.25, dp: 2, vol: 0.0170, drift: 0.00004, float: 60000 },
+  { id: "MNSN", code: "600103", name: "曼松商会",     sector: "贸易", p0: 2.80, dp: 2, vol: 0.0105, drift: 0.00001, float: 30000 },
+  { id: "JLRS", code: "600104", name: "贾拉索船务",   sector: "航运", p0: 0.85, dp: 2, vol: 0.0190, drift: -0.00002, float: 50000 },
+  { id: "GLHD", code: "600105", name: "格拉汉德置业", sector: "地产", p0: 1.95, dp: 2, vol: 0.0135, drift: 0.00005, float: 40000 },
+  { id: "WDPA", code: "600106", name: "深水城港务",   sector: "公用", p0: 5.10, dp: 2, vol: 0.0068, drift: 0.00001, float: 25000 }
 ];
 
 export const stockById = id => STOCKS.find(s => s.id === id);export const clampSpeed = v => Math.min(SPEED_MAX, Math.max(SPEED_MIN, Math.round(Number(v) || TICK_MS)));
@@ -430,9 +430,9 @@ export function newMarket() {
   const stocks = {}, prevClose = {};
   for (const s of STOCKS) {
     const q = Number(s.p0.toFixed(s.dp));
-    const v0 = 4000 + Math.floor(Math.random() * 6000);
+    const v0 = Math.max(2, Math.round(s.float / 200 * (0.5 + Math.random())));
     stocks[s.id] = {
-      price: q, prevClose: q, halt: false, crowd: CROWD_NEUTRAL, flow: 0,
+      price: q, prevClose: q, halt: false, crowd: CROWD_NEUTRAL, flow: 0, float: s.float,
       cur: { o: q, h: q, l: q, c: q, v: v0 },
       bars: [], bt: 0
     };
@@ -512,7 +512,7 @@ export function stepMarket(m) {
 
     // 每 TICKS_PER_DAY 跳滚动一次昨收，涨跌停重新计算
     const newDay = tick % TICKS_PER_DAY === 0;
-    const vol = 500 + Math.floor(Math.random() * 4500);
+    const vol = Math.max(1, Math.round((s.float || 100000) / 200 * (0.4 + Math.random() * 1.2)));
     let cur = { ...st.cur };
     cur.c = price;
     cur.h = Math.max(Number(cur.h) || price, price);
@@ -541,7 +541,7 @@ export function stepMarket(m) {
   return out;
 }
 
-// ── 账户：做多股票，T+0，佣金万 0.55、最低 5 金 ────────────────
+// ── 账户：做多股票，T+0，佣金 1%、最低 1 银 ────────────────
 export function newAccount(cash = 0) {
   return { cash, deposited: cash, realized: 0, positions: {}, pending: [] };
 }
