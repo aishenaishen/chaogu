@@ -14,7 +14,7 @@ export const BAR_TICKS = 6;
 export const SEC_PER_TICK = 2;
 export const DEFAULT_BAR_SEC = 30;
 export const BAR_SEC_CHOICES = [5, 30, 60, 300, 900];       // 6 跳 = 1 根 K
-export const MAX_BARS = 30;       // 保留 K 线根数
+export const MAX_BARS = 60;       // 保留 K 线根数（可左右回看）
 export const FEE_RATE = 0.01;     // 佣金 1%（费伦的钱庄抽得狠）
 export const FEE_MIN = 0.1;       // 最低佣金 1 银
 export const LOT = 10;            // 一手 10 股（费伦的钱小，一手别太贵）

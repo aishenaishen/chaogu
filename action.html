@@ -197,7 +197,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
 .evlog .up{color:#c9432f}.evlog .dn{color:#12855c}
 .publog{margin-top:10px;border-top:1px dashed #ded5c2;padding-top:8px}
 .publog-h{font-size:10px;letter-spacing:.12em;color:#a08b6a;margin-bottom:6px}
-.publog .evlog{max-height:96px}
+.publog .evlog{max-height:150px}
 
 @media (max-width:900px){
   .grid{grid-template-columns:1fr;min-height:0}
@@ -214,7 +214,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
       <span id="actBadge" class="cnt" hidden></span>
-    <span class="ver">v3.7.0</span>
+    <span class="ver">v3.9.1</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -278,6 +278,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
         </div>
         <div class="ctf"><span class="ctfl">周期</span><span id="tfChips"></span><span class="shint" id="tfHint"></span></div>
         <div id="chartbox"><canvas id="chart"></canvas></div>
+        <div class="ctf"><span class="ctfl">回看</span><input type="range" id="chartPan" min="0" max="0" value="0" step="1"><span class="shint" id="panHint">最新</span></div>
         <div class="evbar" id="evbar">
           <div class="evrow gm" id="evGm" hidden>
             <span class="evtag">城主事件</span>
@@ -290,7 +291,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
           </div>
         </div>
         <div class="publog" id="publog" hidden>
-          <div class="publog-h">事件回溯 · 最近走完的城主事件</div>
+          <div class="publog-h" id="publogH">事件回溯 · 最近走完的城主事件</div>
           <div class="evlog" id="evlogPub"></div>
         </div>
       </section>
@@ -484,7 +485,8 @@ import {
   MKT_KEY, ACC_KEY, TICK_MS, STOCKS, stockById, fmt, PRESETS, clampSpeed,
   newMarket, stepMarket, newAccount, equityOf, positionValue, unrealizedOf, feeOf, indexOf, LOT, TRUST_TIERS, trustTier, BAR_SEC_CHOICES, DEFAULT_BAR_SEC,
   SHORT_MARGIN, marginUsed, needsCover, shortLoss,
-  SETTLE_TICKS, releasePending, pendingTotal, addCrowd, clampCrowd, CROWD_NEUTRAL
+  SETTLE_TICKS, releasePending, pendingTotal, addCrowd, clampCrowd, CROWD_NEUTRAL,
+  SEC_PER_TICK, MAX_BARS
 } from "./shared.js";
 
 const $ = s => document.querySelector(s);
@@ -637,7 +639,7 @@ const buildStocks = () => {
 
 /* ---------- 行情读写 ---------- */
 function seedBars(m) {
-  for (let i = 0; i < 30 * (DEFAULT_BAR_SEC / 2); i++) m = stepMarket(m);
+  for (let i = 0; i < MAX_BARS * (DEFAULT_BAR_SEC / 2); i++) m = stepMarket(m);
   for (const s of STOCKS) { const st = m.stocks[s.id]; st.prevClose = st.price; }
   m.indexPrev = m.index;
   return m;
@@ -645,7 +647,7 @@ function seedBars(m) {
 
 async function applyMarket(fn) {
   if (DEMO) {
-    mkt = fn(structuredClone(mkt)); render();
+    mkt = fn(structuredClone(mkt)); noteBuf(mkt); render();
     if (isGM && $("#gmMask").classList.contains("on")) { try { gmSync(); } catch (e) {} }
     return;
   }
@@ -663,6 +665,7 @@ async function applyMarket(fn) {
     throw e;
   }
   mkt = next;
+  noteBuf(next);
   try { render(); } catch (e) { if (Date.now() - lastWriteWarn > 4000) { lastWriteWarn = Date.now(); toast("渲染失败：" + (e && e.message)); } }
   if (isGM) {
     try { gmSync(); } catch (e) { const d = $("#gmDbg"); if (d) d.textContent = "GM 刷新失败：" + (e && e.message); }
@@ -685,6 +688,11 @@ async function loadMarket() {
   const md = await OBR.room.getMetadata();
   const raw = md[MKT_KEY];
   // 房间里可能残留旧版（外汇版）的 market 对象：结构不对就重建，别让面板崩掉
+  if (raw && Array.isArray(raw.history)) {
+    raw.history = raw.history.map(h => h && !h.t && h.title
+      ? { a: h.at || 0, t: h.title, n: h.ticks || 1, m: 0, p: {}, mv: (h.moves || []).map(m => [m.id, m.pct]), tr: {} }
+      : h);
+  }
   mkt = hasStocks(raw) ? raw : null;
   if (!mkt) {
     if (raw) toast("行情结构已升级，盘面按新经济重置。");
@@ -921,6 +929,8 @@ function renderPubLog() {
   if (!pub || !pubList || !mkt) return;
   const h = (mkt.history || []).slice(-20).reverse();
   pub.hidden = !h.length;
+  const ph = $("#publogH");
+  if (ph) ph.textContent = "事件回溯 · 最近 " + h.length + " 条（上下滚动）";
   pubList.innerHTML = h.map(x => {
     const mv = (x.mv || []).map(m => {
       const nm = ((STOCKS.find(s => s.id === m[0]) || {}).name || m[0]).replace(/^深水城/, "").slice(0, 4);
@@ -929,6 +939,85 @@ function renderPubLog() {
     const dur = x.m ? x.m + " 分钟" : x.n + " 跳";
     return `<div class="lg"><b>${x.t}</b><span>${dur}</span>${mv}</div>`;
   }).join("");
+}
+
+// 五个周期各走各的：同一口 tick 同时喂五条 K 线，互不覆盖
+const tfBars = {};   // pid -> { sec: [{b,o,h,l,c}, ...] }
+function feedTf(m) {
+  if (!m || !m.stocks) return;
+  for (const id of Object.keys(m.stocks)) {
+    const st = m.stocks[id]; if (!st || !(Number(st.price) > 0)) continue;
+    const bag = tfBars[id] || (tfBars[id] = {});
+    for (const sec of BAR_SEC_CHOICES) {
+      const arr = bag[sec] || (bag[sec] = []);
+      const b = Math.floor(m.tick * SEC_PER_TICK / sec);
+      const p = Number(st.price), last = arr[arr.length - 1];
+      if (last && last.b === b) {
+        last.h = Math.max(last.h, p); last.l = Math.min(last.l, p); last.c = p;
+      } else {
+        arr.push({ b, o: last ? last.c : p, h: p, l: p, c: p });
+        if (arr.length > MAX_BARS) arr.shift();
+      }
+    }
+  }
+}
+
+// 每只股票保留逐跳价格，切周期时用它重算 K 线（不再清空重来）
+const priceBuf = {};
+function noteBuf(m) {
+  if (!m || !m.stocks) return;
+  for (const id of Object.keys(m.stocks)) {
+    const st = m.stocks[id]; if (!st || !(Number(st.price) > 0)) continue;
+    const arr = priceBuf[id] || (priceBuf[id] = []);
+    const last = arr[arr.length - 1];
+    if (!last || last.t !== m.tick) arr.push({ t: m.tick, p: Number(st.price) });
+    if (arr.length > 4000) arr.shift();
+  }
+  feedTf(m);
+}
+function seedBuf() {
+  for (const id of Object.keys(priceBuf)) delete priceBuf[id];
+  if (!mkt) return;
+  const per = Math.max(1, (Number(mkt.barSec) || DEFAULT_BAR_SEC) / SEC_PER_TICK);
+  for (const id of Object.keys(mkt.stocks || {})) {
+    const st = mkt.stocks[id], base = Math.max(0, mkt.tick - per * ((st.bars || []).length + 1));
+    const arr = priceBuf[id] = [];
+    (st.bars || []).forEach((b, i) => {
+      const c = Array.isArray(b) ? b[3] : b.c;
+      arr.push({ t: Math.round(base + per * i), p: Number(c) });
+    });
+    // 用已存的当前周期 K 线，给该周期补一条可继续的序列
+    const sec = Number(mkt.barSec) || DEFAULT_BAR_SEC;
+    const bag = tfBars[id] || (tfBars[id] = {});
+    const bars = st.bars || [];
+    if (bars.length) {
+      const tail = Math.floor(mkt.tick * SEC_PER_TICK / sec);
+      bag[sec] = bars.map((b, i) => {
+        const o = Array.isArray(b) ? b[0] : b.o, h = Array.isArray(b) ? b[1] : b.h;
+        const l = Array.isArray(b) ? b[2] : b.l, c = Array.isArray(b) ? b[3] : b.c;
+        return { b: tail - (bars.length - 1 - i), o, h, l, c };
+      });
+    }
+  }
+}
+function rebuildBars(id, sec) {
+  const arr = priceBuf[id] || [];
+  if (arr.length < 3) return null;
+  const perSec = Math.max(0.5, sec / SEC_PER_TICK);   // 一根蜡烛多少跳
+  const out = []; let bucket = null, bt = 0;
+  for (const x of arr) {
+    const bId = Math.floor(x.t / perSec);
+    if (!bucket || bucket.id !== bId) {
+      if (bucket) out.push([bucket.o, bucket.h, bucket.l, bucket.c]);
+      bucket = { id: bId, o: x.p, h: x.p, l: x.p, c: x.p };
+    } else {
+      bucket.h = Math.max(bucket.h, x.p);
+      bucket.l = Math.min(bucket.l, x.p);
+      bucket.c = x.p;
+    }
+  }
+  if (bucket) out.push([bucket.o, bucket.h, bucket.l, bucket.c]);
+  return out.slice(-MAX_BARS);
 }
 
 function drawChart() {
@@ -944,16 +1033,35 @@ function drawChart() {
 
   const bs = Number(mkt?.barSec) || DEFAULT_BAR_SEC;
   document.querySelectorAll("#tfChips [data-tf]").forEach(b => b.classList.toggle("on", Number(b.dataset.tf) === bs));
-  const hint = $("#tfHint"); if (hint) hint.textContent = "约 " + (bs / 2) + " 跳/根";
+  const hint = $("#tfHint");
+  if (hint) {
+    const sp = Number(mkt?.speed) || 5000, barTicks = bs / 2;
+    const real = barTicks * sp / 1000;
+    const rt = real >= 60 ? (real / 60).toFixed(1) + " 分钟" : (Math.round(real * 10) / 10) + " 秒";
+    hint.textContent = "约 " + barTicks + " 跳/根 · 现实 " + rt;
+  }
   const st = mkt?.stocks?.[pid];
   if (!st) return;
   const s = stockById(pid), dp = s.dp;
-  const series = (st.bars || []).map(b => Array.isArray(b) ? { o: b[0], h: b[1], l: b[2], c: b[3] } : b).concat([st.cur]);
+  const own = (tfBars[pid] && tfBars[pid][bs]) || null;
+  const base = own && own.length
+    ? own.map(x => ({ o: x.o, h: x.h, l: x.l, c: x.c }))
+    : (st.bars || []).map(b => Array.isArray(b) ? { o: b[0], h: b[1], l: b[2], c: b[3] } : b);
+  const all = base.concat([st.cur]);
   const pos = acc.positions[pid];
 
   const padL = 10, padR = 62, padT = 16, padB = 22;
   const iw = W - padL - padR, ih = H - padT - padB;
   if (iw < 24 || ih < 24) return;
+  const visible = Math.max(12, Math.min(60, Math.floor(iw / 12)));
+  const maxBack = Math.max(0, all.length - visible);
+  if (chartBack > maxBack) chartBack = maxBack;
+  const end = all.length - chartBack;
+  const series = all.slice(Math.max(0, end - visible), end);
+  const panEl = $("#chartPan");
+  if (panEl) { panEl.max = maxBack; panEl.value = chartBack; }
+  const panHint = $("#panHint");
+  if (panHint) panHint.textContent = chartBack ? "回看 " + chartBack + " 根" : "最新";
 
   let hi = -Infinity, lo = Infinity;
   for (const b of series) { hi = Math.max(hi, b.h); lo = Math.min(lo, b.l); }
@@ -1321,15 +1429,28 @@ const tfLabel = sec => sec >= 60 ? (sec / 60) + " 分" : sec + " 秒";
 const tfTicks = sec => (sec / 2).toFixed(sec % 2 ? 1 : 0).replace(/\.0$/, "");
 $("#tfChips").innerHTML = BAR_SEC_CHOICES.map(sec =>
   `<button class="chip" data-tf="${sec}">${tfLabel(sec)}</button>`).join("");
+$("#chartPan").oninput = ev => { chartBack = Math.max(0, Number(ev.target.value) || 0); drawChart(); };
 $("#tfChips").onclick = async ev => {
   const b = ev.target.closest("[data-tf]");
   if (!b) return;
   const sec = Number(b.dataset.tf);
+  chartBack = 0;
   await applyMarket(m => {
     m.barSec = sec;
     for (const id of Object.keys(m.stocks || {})) {
       const st = m.stocks[id];
-      st.bars = [];
+      const own = (tfBars[id] && tfBars[id][sec]) || null;
+      const rb = rebuildBars(id, sec) || [];
+      // 刚切过来时「自己的序列」可能只有一两根，用逐跳缓存补足历史
+      const use = own && own.length >= Math.min(6, rb.length)
+        ? own.map(x => ({ o: x.o, h: x.h, l: x.l, c: x.c }))
+        : rb.map(x => ({ o: x[0], h: x[1], l: x[2], c: x[3] }));
+      if (use.length && !(own && own.length >= use.length)) {
+        const tail = Math.floor(m.tick * SEC_PER_TICK / sec);
+        tfBars[id] = tfBars[id] || {};
+        tfBars[id][sec] = use.map((x, i) => ({ b: tail - (use.length - 1 - i), o: x.o, h: x.h, l: x.l, c: x.c }));
+      }
+      st.bars = use.slice(-MAX_BARS).map(x => [x.o, x.h, x.l, x.c]);
       st.bt = 0;
       st.cur = { o: st.price, h: st.price, l: st.price, c: st.price, v: 0 };
     }
@@ -1490,6 +1611,9 @@ $("#gmResetMkt").onclick = () => arm($("#gmResetMkt"), async () => {
     return m;
   });
   render(); gmSync();
+  for (const k in tfBars) delete tfBars[k];
+  for (const k in priceBuf) delete priceBuf[k];
+  chartBack = 0;
   SFX.reset(); toast("六只股票已重置回发行价。");
 });
 $("#gmResetPlayers").onclick = () => arm($("#gmResetPlayers"), async () => {
@@ -1500,7 +1624,7 @@ $("#gmResetPlayers").onclick = () => arm($("#gmResetPlayers"), async () => {
   for (const id of ids) fresh.players[id] = newAccount(0);
   fresh.players[myId] = newAccount(0);
   await OBR.room.setMetadata({ [ACC_KEY]: fresh });
-  acc = newAccount(0);
+  acc = cleanAcc(fresh.players[accPid()]);
   render(); refreshPlayers();
   SFX.reset(); toast("玩家资金已清零（" + Object.keys(fresh.players).length + " 人）。");
 });
@@ -1610,9 +1734,10 @@ async function bootDemo() {
   $("#accTag").textContent = "试算资金";
   isGM = !isEmbedded;
   $("#btnGM").style.display = isGM ? "" : "none";
-  await loadMarket(); await loadAcc(); render(); refreshHeld();
+  await loadMarket(); await loadAcc(); seedBuf(); render(); refreshHeld();
   const demoTick = () => {
     if (mkt && mkt.running !== false) mkt = stepMarket(mkt);
+    noteBuf(mkt);
     render();
     checkMargin();
     settleUp();
@@ -1634,11 +1759,11 @@ async function connect() {
   const role = await OBR.player.getRole();
   isGM = role === "GM";
   $("#btnGM").style.display = isGM ? "" : "none";
-  await loadMarket(); await loadAcc(); render(); refreshHeld();
+  await loadMarket(); await loadAcc(); seedBuf(); render(); refreshHeld();
   if (isGM) { gmSync(); refreshPlayers(); }
 
   OBR.room.onMetadataChange(md => {
-    if (hasStocks(md[MKT_KEY])) { mkt = md[MKT_KEY]; render(); if (isGM) gmSync(); updateDriver(); checkMargin(); settleUp(); }
+    if (hasStocks(md[MKT_KEY])) { mkt = md[MKT_KEY]; noteBuf(mkt); render(); if (isGM) gmSync(); updateDriver(); checkMargin(); settleUp(); }
     if (md[ACC_KEY] && md[ACC_KEY].players?.[accPid()]) {
       const mine = cleanAcc(md[ACC_KEY].players[accPid()]);
       if (JSON.stringify(mine) !== JSON.stringify(acc)) { acc = mine; render(); refreshHeld(); }
@@ -1663,6 +1788,7 @@ async function connect() {
 
 window.__diag = () => ({ tick: mkt && mkt.tick, isGM, DEMO, driver: !!driverTimer, speed: mkt && mkt.speed, steppedAgo: mkt && mkt.steppedAt ? Date.now() - mkt.steppedAt : null, running: mkt && mkt.running, lastBy: mkt && mkt.lastBy, hist: mkt && (mkt.history || []).length, evs: mkt && (mkt.events || []).map(e => [e.title.slice(0,4), e.left, e.ticks]) });
 let driverTimer = null;
+let chartBack = 0;
 let actAs = "";                 // GM 代客下单：空=自己，否则是玩家 id
 const accPid = () => actAs || myId;
 function paintActBadge() {
