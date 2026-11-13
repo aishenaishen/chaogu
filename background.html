@@ -1,24 +1,11 @@
 <!doctype html>
 <meta charset="utf-8">
 <script type="module">
+import OBR from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3/+esm";
 import { MKT_KEY, TICK_MS, newMarket, stepMarket } from "./shared.js";
 
-const SDK_URL = "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3/+esm";
-
-// SDK 偶发加载失败时一直重试，别让行情因为一次网络抖动就停摆
-async function loadSDK() {
-  for (;;) {
-    try {
-      const sdk = await import(SDK_URL);
-      const o = sdk.default || sdk;
-      if (o && typeof o.onReady === "function") return o;
-    } catch (e) { /* 继续重试 */ }
-    await new Promise(r => setTimeout(r, 3000));
-  }
-}
-
-const OBR = await loadSDK();
-
+// 静态 import：SDK 的 message 监听必须在 OBR 发出 OBR_READY 之前就挂上，
+// 动态 import 会输掉这场竞速（onReady 永远不触发）。
 OBR.onReady(async () => {
   const role = await OBR.player.getRole();
   if (role !== "GM") return;   // 只让 GM 的浏览器推进行情，避免多人重复跳

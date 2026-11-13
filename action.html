@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -184,7 +184,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v2.0.1</span>
+    <span class="ver">v2.0.2</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -366,6 +366,13 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
 
 <div id="toast"></div>
 
+<!-- 关键：SDK 必须静态 import。OBR 在 iframe 的 load 事件里发 OBR_READY，
+     动态 import 会输掉这场竞速，onReady 永远不触发（这正是 v2.0.0 失败的原因）。 -->
+<script type="module">
+  import OBR from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3/+esm";
+  window.__OBR_SDK = OBR;
+</script>
+
 <script type="module">
 import {
   MKT_KEY, ACC_KEY, TICK_MS, STOCKS, stockById, fmt, PRESETS,
@@ -373,13 +380,21 @@ import {
 } from "./shared.js";
 
 const $ = s => document.querySelector(s);
+let toastTimer = null;
+function toast(msg) {
+  const el = $("#toast");
+  if (!el) return;
+  el.textContent = msg;
+  el.classList.add("on");
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove("on"), 2400);
+}
 const money = v => (v < 0 ? "-" : "") + Math.abs(v).toLocaleString("en-US",
   { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = v => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
 const volTxt = v => Math.round(v).toLocaleString("en-US") + " 手";
 
 /* ---------- 运行环境 ---------- */
-const SDK_URL = "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3/+esm";
 const QS = new URLSearchParams(location.search);
 // 在 OBR 里，动作面板一定跑在 iframe 中；直接打开文件则是顶层窗口
 const isEmbedded = (() => { try { return window.parent !== window; } catch (e) { return true; } })();
@@ -387,8 +402,7 @@ const FORCE_DEMO = QS.has("demo");
 const FORCE_OBR = QS.has("obr");
 const DEMO_CASH = 5000;   // 试算模式的开局资金：够买 1~7 手
 
-let OBR = null;
-let sdkError = "";
+let OBR = window.__OBR_SDK || null;
 
 function connError(msg) {
   const bar = $("#connbar");
@@ -916,17 +930,20 @@ async function main() {
   // 本地预览（直接打开文件）：立即进试算，不必干等 OBR
   if ((!isEmbedded && !FORCE_OBR) || FORCE_DEMO) { await bootDemo(); return; }
 
-  const sdk = await loadSDK();
-  if (!sdk) {
-    connError("SDK 加载失败（" + (sdkError || "网络不可达") + "）。先确认浏览器能打开 cdn.jsdelivr.net，再点重试。");
+  if (!OBR || typeof OBR.onReady !== "function") {
+    connError("SDK 没加载出来（浏览器打不开 cdn.jsdelivr.net？）。点「重试」；还不行就检查网络或代理。");
     return;
   }
-  OBR = sdk;
+  if (OBR.isAvailable === false) {
+    connError("OBR 加载面板时没带 obrref 参数，SDK 不知道父窗口来源，握手从根上不可能成功。先把扩展删掉重新 Add；还这样，请把面板地址栏里的网址发我。");
+    return;
+  }
 
   let started = false;
   const timer = setTimeout(() => {
     if (started) return;
-    connError("SDK 已加载，但 12 秒内没握手成功。通常是 OBR 缓存了旧文件：Extensions 里把本扩展删掉，再 Add 一次。");
+    connError("12 秒没等到 OBR 的握手消息（obrref " + (QS.has("obrref") ? "有" : "无") +
+      "）。先把扩展删掉重新 Add 一次（OBR 会缓存旧文件）；仍然不行，请把这条消息截图发我。");
   }, 12000);
 
   try {
