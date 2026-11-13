@@ -214,7 +214,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
       <span id="actBadge" class="cnt" hidden></span>
-    <span class="ver">v3.9.1</span>
+    <span class="ver">v3.11.0</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -323,7 +323,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
           <div class="posline"><span>待交收</span><span><b id="pPending">0.00</b> 金币</span></div>
           <div class="posline"><span>流动性</span><span id="pLiq">—</span></div>
           <button class="closebtn" id="btnClose" disabled>清仓</button>
-          <div class="fhint">T+1：卖出后 6 跳才到账。买跌（融券）押 50% 押金，亏光押金自动平仓。</div>
+          <div class="fhint">T+1：卖出后 6 跳到账，待交收处显示倒计时。买跌（融券）押 50% 押金，亏光押金自动平仓。</div>
         </section>
         <section class="card tipcard">
           <div class="tipt">老雅诺的规矩</div>
@@ -359,6 +359,12 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
       <button class="btn" id="gmResetPlayers">重置玩家资金</button>
       <button class="btn" id="gmMargin">强平检查</button>
       <span class="shint">股票回到发行价、清 K 线事件；玩家钱清零、清空持仓；强平检查扫全桌空单</span>
+    </div>
+    <div class="srow"><label>存档</label>
+      <button class="btn" id="gmSnap">保存快照</button>
+      <button class="btn" id="gmRestore">读取快照</button>
+      <button class="btn" id="gmCatchup">补跳</button>
+      <span class="shint" id="gmSnapInfo">未保存</span>
     </div>
     <div class="srow"><label>行情</label>
       <button class="chip" id="gmRun">继续跳动</button>
@@ -761,6 +767,27 @@ async function settleUp() {
   }
 }
 
+
+// GM 侧：一次性结清全桌所有玩家的待交收（不依赖各自面板是否开着）
+async function settleAll() {
+  if (!mkt || DEMO) return 0;
+  const md = await OBR.room.getMetadata();
+  const all = md[ACC_KEY];
+  if (!all || !all.players) return 0;
+  let total = 0;
+  for (const id in all.players) {
+    const a = cleanAcc(all.players[id]);
+    const got = releasePending(a, mkt.tick || 0);
+    if (got > 0) { all.players[id] = a; total += got; }
+  }
+  if (total > 0) {
+    await OBR.room.setMetadata({ [ACC_KEY]: all });
+    if (all.players[accPid()]) acc = cleanAcc(all.players[accPid()]);
+    render(); if (isGM) refreshPlayers();
+  }
+  return total;
+}
+
 async function setBalance(playerId, cash) {  if (DEMO) {
     if (playerId === "demo") { acc.cash = Math.max(0, cash); localStorage.setItem(LS_KEY, JSON.stringify(acc)); render(); }
     return;
@@ -775,6 +802,21 @@ async function setBalance(playerId, cash) {  if (DEMO) {
 }
 
 /* ---------- 渲染 ---------- */
+function renderPending() {
+  const el = $("#pPending"); if (!el) return;
+  const pend = (acc && acc.pending) || [];
+  if (!pend.length) { el.textContent = "0.00"; return; }
+  const tick = (mkt && mkt.tick) || 0;
+  const sp = clampSpeed((mkt && mkt.speed) || TICK_MS);
+  const due = Math.min(...pend.map(p => Number(p.due) || 0));
+  const left = Math.max(0, due - tick);
+  const since = mkt && mkt.steppedAt ? Date.now() - mkt.steppedAt : 0;
+  const ms = Math.max(0, left * sp - since);
+  const sec = Math.ceil(ms / 1000);
+  el.textContent = money(pendingTotal(acc)) + (left > 0 ? ` \u00b7 ${sec} \u79d2\u540e\u5230\u8d26` : " \u00b7 \u5230\u8d26\u4e2d");
+}
+setInterval(renderPending, 500);
+
 function render() {
   renderPubLog();
   if (!hasStocks(mkt)) return;
@@ -823,7 +865,7 @@ function render() {
   $("#pLine").innerHTML = pos
     ? `<b>${pos.shares}</b> 股 · 成本 <b>${fmt(pos.cost, s.dp)}</b>` + (short ? ` · 押金 <b>${money((-pos.shares) * pos.cost * SHORT_MARGIN)}</b>` : "")
     : `<b>0</b> 股 · 成本 <b>—</b>`;
-  $("#pPending").textContent = money(pendingTotal(acc));
+  renderPending();
   $("#cCrowd").textContent = crowdLabel(st.crowd);
   const trustN = Number.isFinite(Number(st.trust)) ? Number(st.trust) : 50;
   $("#cTrust").textContent = Math.round(trustN) + (trustN >= 65 ? " 稳" : trustN <= 35 ? " 虚" : " 平");
@@ -1616,6 +1658,56 @@ $("#gmResetMkt").onclick = () => arm($("#gmResetMkt"), async () => {
   chartBack = 0;
   SFX.reset(); toast("六只股票已重置回发行价。");
 });
+const SNAP_KEY = "gx-snapshot";
+function snapInfo() {
+  const el = $("#gmSnapInfo");
+  try {
+    const s = JSON.parse(localStorage.getItem(SNAP_KEY) || "null");
+    el.textContent = s ? "已保存：" + new Date(s.at).toLocaleString() : "未保存（存在本机浏览器）";
+  } catch (e) { el.textContent = "未保存"; }
+}
+$("#gmSnap").onclick = async () => {
+  if (DEMO) {
+    localStorage.setItem(SNAP_KEY, JSON.stringify({ at: Date.now(), market: mkt, accounts: null }));
+    snapInfo(); SFX.ok(); return toast("已保存试算快照（本机）");
+  }
+  const md = await OBR.room.getMetadata();
+  if (!hasStocks(md[MKT_KEY])) return toast("盘面还没准备好，稍后再存。");
+  try {
+    localStorage.setItem(SNAP_KEY, JSON.stringify({ at: Date.now(), market: md[MKT_KEY], accounts: md[ACC_KEY] || null }));
+    snapInfo(); SFX.ok(); toast("已保存快照（存在本机浏览器，不进房间数据）");
+  } catch (e) { toast("保存失败：" + e.message); }
+};
+$("#gmRestore").onclick = () => arm($("#gmRestore"), async () => {
+  const snap = JSON.parse(localStorage.getItem(SNAP_KEY) || "null");
+  if (!snap || !hasStocks(snap.market)) return toast("本机还没有可用的快照。");
+  if (!DEMO) {
+    const patch = { [MKT_KEY]: snap.market };
+    if (snap.accounts) patch[ACC_KEY] = snap.accounts;
+    await OBR.room.setMetadata(patch);
+  }
+  mkt = snap.market;
+  for (const k in tfBars) delete tfBars[k];
+  for (const k in priceBuf) delete priceBuf[k];
+  chartBack = 0; seedBuf();
+  acc = cleanAcc((snap.accounts && snap.accounts.players || {})[accPid()]);
+  render(); refreshPlayers(); if (isGM) gmSync();
+  toast("已回到快照时间：" + new Date(snap.at).toLocaleTimeString());
+});
+$("#gmCatchup").onclick = () => arm($("#gmCatchup"), async () => {
+  const before = mkt?.tick || 0;
+  await applyMarket(m => {
+    const sp = clampSpeed(m.speed);
+    const gap = Date.now() - (m.steppedAt || Date.now());
+    const n = Math.min(480, Math.max(0, Math.floor(gap / sp)));
+    for (let i = 0; i < n; i++) m = stepMarket(m);
+    m.lastBy = "补跳";
+    return m;
+  });
+  toast("已补 " + ((mkt?.tick || 0) - before) + " 跳。");
+});
+snapInfo();
+
 $("#gmResetPlayers").onclick = () => arm($("#gmResetPlayers"), async () => {
   const md = await OBR.room.getMetadata();
   const all = md[ACC_KEY] || { v: 1, players: {} };
@@ -1810,6 +1902,7 @@ function updateDriver() {
       if (mkt.running !== false && due) {
         await applyMarket(m => { const n = stepMarket(m); n.lastBy = "面板"; return n; });
         checkMargin();
+        await settleAll();
       }
     } catch (e) { /* 写失败：下一拍再试 */ }
     finally {
@@ -1825,7 +1918,7 @@ setInterval(() => {
   if (!isGM || DEMO || !hasStocks(mkt) || mkt.running === false) return;
   const sp = clampSpeed(mkt.speed);
   if (Date.now() - (mkt.steppedAt || 0) > sp * 2 + 1500) {
-    applyMarket(m => { const n = stepMarket(m); n.lastBy = "看门狗"; return n; }).catch(() => {});
+    applyMarket(m => { const n = stepMarket(m); n.lastBy = "看门狗"; return n; }).then(() => settleAll()).catch(() => {});
   }
 }, 2000);
 
