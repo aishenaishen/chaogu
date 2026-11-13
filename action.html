@@ -184,7 +184,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v2.0.5</span>
+    <span class="ver">v2.0.6</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -473,10 +473,17 @@ async function applyMarket(fn) {
   const md = await OBR.room.getMetadata();
   const cur = md[MKT_KEY] || newMarket();
   const next = fn(structuredClone(cur));
-  await OBR.room.setMetadata({ [MKT_KEY]: next });
+  try {
+    await OBR.room.setMetadata({ [MKT_KEY]: next });
+  } catch (e) {
+    // 写不进去（权限/频率限制）：不假装成功，交给下一拍重试
+    if (Date.now() - lastWriteWarn > 10000) { lastWriteWarn = Date.now(); toast("行情写入失败：" + ((e && e.message) || e)); }
+    throw e;
+  }
   // 不等 metadata 事件回传，先就地刷新一次，GM 点完立刻看到结果
   mkt = next; render(); if (isGM) gmSync();
 }
+let lastWriteWarn = 0;
 
 async function loadMarket() {
   if (DEMO) { mkt = seedBars(newMarket()); return; }
@@ -867,11 +874,12 @@ $("#gmClose").onclick = gmClose;
 $("#gmMask").addEventListener("click", e => { if (e.target.id === "gmMask") gmClose(); });
 $("#gmRun").onclick = () => applyMarket(m => { m.running = true; return m; });
 $("#gmPause").onclick = () => applyMarket(m => { m.running = false; return m; });
-function setSpeed(ms) {
+async function setSpeed(ms) {
   const v = clampSpeed(ms);
-  applyMarket(m => { m.speed = v; return m; });
+  await applyMarket(m => { m.speed = v; return m; });
   toast("行情改为每 " + (v / 1000) + " 秒一跳。");
   gmSync();
+  updateDriver();
 }
 document.querySelectorAll("[data-speed]").forEach(b => {
   b.onclick = () => setSpeed(Number(b.dataset.speed));
@@ -910,11 +918,13 @@ $("#gmEvAdd").onclick = () => {
   const title = $("#gmEvTitle").value.trim();
   if (!title) return toast("先写个事件标题。");
   const imp = {};
+  const pct = Number($("#gmEvPct").value) || 0;
   $("#gmStocksChips").querySelectorAll(".chip.on").forEach(b => {
-    imp[b.dataset.gs] = Number($("#gmEvPct").value) || 0;
+    imp[b.dataset.gs] = pct;
   });
   if (!Object.keys(imp).length) return toast("至少选一只受影响的股票。");
   fireEvent({ title, desc: $("#gmEvDesc").value.trim(), imp, ticks: Math.max(1, Number($("#gmEvTicks").value) || 1) });
+  if (Math.abs(pct) > 10) toast("幅度超过涨跌停 ±10%：一天最多走 10%，多出的部分会被截断。");
   $("#gmEvTitle").value = ""; $("#gmEvDesc").value = "";
   $("#gmStocksChips").querySelectorAll(".chip").forEach(b => b.classList.remove("on"));
 };
@@ -968,7 +978,7 @@ async function connect() {
   if (isGM) { gmSync(); refreshPlayers(); }
 
   OBR.room.onMetadataChange(md => {
-    if (hasStocks(md[MKT_KEY])) { mkt = md[MKT_KEY]; render(); if (isGM) gmSync(); }
+    if (hasStocks(md[MKT_KEY])) { mkt = md[MKT_KEY]; render(); if (isGM) gmSync(); updateDriver(); }
     if (md[ACC_KEY] && md[ACC_KEY].players?.[myId]) {
       const mine = cleanAcc(md[ACC_KEY].players[myId]);
       if (JSON.stringify(mine) !== JSON.stringify(acc)) { acc = mine; render(); }
@@ -977,23 +987,32 @@ async function connect() {
   // 有人进出房间时刷新 GM 面板里的玩家列表
   OBR.party.onChange(() => { if (isGM) refreshPlayers(); });
 
-  // 心跳自检：正常由 background 推进；如果 OBR 把后台页挂起或它没跑起来，
-  // GM 这块面板自己顶班，行情不会停在原地。
-  let lastBeatStep = 0;
-  setInterval(async () => {
-    if (!isGM || !mkt) return;
-    const speed = clampSpeed(mkt.speed);
-    const idle = Date.now() - (mkt.steppedAt || 0);
+  // 谁推行情：GM 开着这块面板时，由面板自己按速度精确推进；
+  // 面板关掉以后，background.html 发现「很久没跳」才会接手。
+  // 这样只有一个写入者，改速度/加事件不会被后台的旧快照覆盖。
+  updateDriver();
+  setInterval(() => {
     const beat = $("#gmBeat");
-    if (beat) beat.textContent = mkt.steppedAt ? `· 最后推进 ${Math.max(0, Math.round(idle / 1000))} 秒前` : "";
-    if (mkt.running === false) return;
-    if (idle < Math.max(1200, speed * 1.2)) return;
-    if (Date.now() - lastBeatStep < speed * 0.8) return;
-    lastBeatStep = Date.now();
-    try { await applyMarket(m => stepMarket(m)); } catch (e) { /* 下一轮再试 */ }
+    if (!beat) return;
+    const idle = Date.now() - (mkt.steppedAt || 0);
+    beat.textContent = mkt.steppedAt ? `· 最后推进 ${Math.max(0, Math.round(idle / 1000))} 秒前` : "";
   }, 1000);
 
-  toast("已连上 Owlbear，行情由 GM 的后台推进。");
+  toast("已连上 Owlbear，行情由你的面板推进（关掉面板后由后台接手）。");
+}
+
+let driverTimer = null;
+function updateDriver() {
+  clearTimeout(driverTimer);
+  if (!isGM || DEMO || !mkt) return;
+  const sp = clampSpeed(mkt.speed);
+  driverTimer = setTimeout(async () => {
+    const due = Date.now() - (mkt.steppedAt || 0) >= sp - 100;
+    if (mkt.running !== false && due) {
+      try { await applyMarket(m => stepMarket(m)); } catch (e) { /* 下一拍再试 */ }
+    }
+    updateDriver();
+  }, sp);
 }
 
 async function main() {

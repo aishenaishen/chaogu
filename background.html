@@ -2,44 +2,40 @@
 <meta charset="utf-8">
 <script type="module">
 import OBR from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3/+esm";
-import { MKT_KEY, TICK_MS, clampSpeed, newMarket, stepMarket } from "./shared.js";
+import { MKT_KEY, clampSpeed, newMarket, stepMarket } from "./shared.js";
 
 // SDK 必须静态 import：OBR 在 iframe 的 load 事件里才发 OBR_READY，
 // 动态 import 会输掉这场竞速，onReady 永远不触发。
 
+// 后台页做「兜底推进」：GM 开着面板时由 action.html 精确推进；
+// 两者都遵守「到期才跳」，这里多让 1.2 秒，所以不会互相抢跳。
+const GRACE_MS = 1200;
+
 OBR.onReady(async () => {
   const role = await OBR.player.getRole();
-  if (role !== "GM") return;   // 只让 GM 的浏览器推进行情，避免多人重复跳
+  if (role !== "GM") return;   // 只有 GM 的浏览器推进，避免多人重复跳
 
   const md = await OBR.room.getMetadata();
   if (!md[MKT_KEY] || !md[MKT_KEY].stocks) {
     await OBR.room.setMetadata({ [MKT_KEY]: newMarket() });
   }
 
-  // 每 1 秒查一次「该跳了吗」，而不是死等一个 setInterval：
-  // GM 把 30 秒改成 1 秒时，最多 1 秒就生效。
-  let elapsed = 0;
-  let lastStamp = (await OBR.room.getMetadata())[MKT_KEY]?.steppedAt || 0;
+  // 和面板用同一条「到期才跳」规则，但多让 1.2 秒：
+  // 面板开着时几乎总是面板先跳；面板关掉后，这里按速度接手。
+  const GRACE_MS = 1200;
+
   async function loop() {
-    let wait = TICK_MS;
     try {
       const cur = (await OBR.room.getMetadata())[MKT_KEY];
-      if (cur) {
-        // 面板（GM 开着控制台时）也可能顶班推进行情；谁推的都算数，别重复跳
-        if (cur.steppedAt && cur.steppedAt !== lastStamp) { elapsed = 0; lastStamp = cur.steppedAt; }
-        wait = clampSpeed(cur.speed);
-        if (cur.running !== false && cur.stocks) {
-          elapsed += 1000;
-          if (elapsed >= wait) {
-            const next = stepMarket(cur);
-            elapsed = 0;
-            lastStamp = next.steppedAt;
-            await OBR.room.setMetadata({ [MKT_KEY]: next });
-          }
+      if (cur && cur.stocks && cur.running !== false) {
+        const wait = clampSpeed(cur.speed);
+        const stamp = cur.steppedAt || 0;
+        if (Date.now() - stamp >= wait + GRACE_MS) {
+          await OBR.room.setMetadata({ [MKT_KEY]: stepMarket(cur) });
         }
       }
     } catch (e) { /* 下一轮再试 */ }
-    setTimeout(loop, Math.min(1000, wait));
+    setTimeout(loop, 1000);
   }
   loop();
 });
