@@ -1,4 +1,4 @@
-﻿// 金手指证券交易所 · 共享数据层
+// 金手指证券交易所 · 共享数据层
 // 深水城五方势力各有「上市产业」。价格按随机游走 + 事件冲击推进。
 // 注意：字符串里不要出现未转义的英文双引号，否则整个模块语法错误。
 
@@ -68,6 +68,13 @@ const clampToLimit = (price, prevClose) => {
   return Math.max(lo, Math.min(hi, price));
 };
 
+// 把「一共 pct%」摊成每跳的对数收益：复利走完 total 跳，正好等于 pct%
+const logDrift = (pct, total) => {
+  const p = Number(pct);
+  if (!Number.isFinite(p)) return 0;
+  return Math.log(Math.max(0.05, 1 + p / 100)) / Math.max(1, Number(total) || 1);
+};
+
 export function indexOf(m) {
   if (!m || !m.stocks) return 1000;
   let sum = 0, n = 0;
@@ -102,7 +109,7 @@ export function newMarket() {
 
 export function stepMarket(m) {
   const tick = (m.tick || 0) + 1;
-  const volMul = m.vol || 1;
+  const volMul = Number.isFinite(Number(m.vol)) ? Number(m.vol) : 1;
 
   // 事件：总冲击按持续跳数摊平，逐跳施加
   // free=true 的是城主投放的事件：不受涨跌停限制（黑天鹅）；随机快讯照常受限
@@ -115,7 +122,7 @@ export function stepMarket(m) {
     left -= 1;
     const bucket = e.free ? driftF : driftN;
     for (const id in (e.imp || {})) {
-      bucket[id] = (bucket[id] || 0) + (Number(e.imp[id]) / 100) / total;
+      bucket[id] = (bucket[id] || 0) + logDrift(e.imp[id], total);
     }
     if (left > 0) events.push({ ...e, ticks: total, left });
   }
@@ -126,7 +133,7 @@ export function stepMarket(m) {
     const n = NEWS_FLAVOR[Math.floor(Math.random() * NEWS_FLAVOR.length)];
     news = n.t; newsLeft = 6;
     events.push({ id: "news-" + tick, title: n.t, desc: "", imp: n.imp, ticks: 4, left: 4 });
-    for (const id in n.imp) driftN[id] = (driftN[id] || 0) + (n.imp[id] / 100) / 4;
+    for (const id in n.imp) driftN[id] = (driftN[id] || 0) + logDrift(n.imp[id], 4);
   }
 
   const stocks = {};
@@ -143,10 +150,15 @@ export function stepMarket(m) {
       continue;
     }
     let ret = s.vol * volMul * gauss() + s.drift + (driftN[s.id] || 0);
-    let price = st.price * Math.exp(ret);
-    if (m.limit !== false) price = clampToLimit(price, st.prevClose || st.price);
-    const free = driftF[s.id] || 0;
-    if (free) price *= Math.exp(free);   // 城主事件：黑天鹅，不封板
+    const free = driftF[s.id] || 0;   // 城主事件：黑天鹅，不封板
+    let price = st.price * Math.exp(ret + free);
+    if (m.limit !== false && !free) {
+      // 只对还在板内的价格封板；已经因黑天鹅跌出板外的，不往回拽
+      const pc = st.prevClose || st.price;
+      const eps = Math.pow(10, -s.dp) + 1e-9;   // 容许两位小数取整带来的出界
+      const lo = pc * (1 - LIMIT), hi = pc * (1 + LIMIT);
+      if (st.price >= lo - eps && st.price <= hi + eps) price = clampToLimit(price, pc);
+    }
     price = Math.max(0.01, Number(price.toFixed(s.dp)));
 
     // 每 TICKS_PER_DAY 跳滚动一次昨收，涨跌停重新计算
