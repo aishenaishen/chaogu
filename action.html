@@ -93,6 +93,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
 .evbar{flex:none;display:flex;flex-direction:column;gap:6px;margin-top:9px}
 .evrow{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:10px;font-size:11.5px;min-height:32px;
   background:#f4f7f5;border:1px solid #e4ebe7;color:#5d6f66}
+.evrow[hidden]{display:none}
 .evrow .evtag{font-size:9.5px;font-weight:700;color:#fff;background:#9aa8a1;border-radius:4px;padding:1px 6px;flex:none}
 .evrow .evtxt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .evrow.news{background:#eef7f1;border-color:#d5ecdd;color:#3f6b55}
@@ -199,7 +200,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v2.7.1</span>
+    <span class="ver">v2.7.3</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -634,11 +635,18 @@ async function loadMarket() {
   const raw = md[MKT_KEY];
   // 房间里可能残留旧版（外汇版）的 market 对象：结构不对就重建，别让面板崩掉
   mkt = hasStocks(raw) ? raw : null;
-  if (!mkt) { mkt = newMarket(); await OBR.room.setMetadata({ [MKT_KEY]: mkt }); }
+  if (!mkt) {
+    if (raw) toast("行情结构已升级，盘面按新经济重置。");
+    mkt = newMarket();
+    await OBR.room.setMetadata({ [MKT_KEY]: mkt });
+  }
 }
 
-const hasStocks = m => !!(m && m.stocks && STOCKS.every(s =>
-  m.stocks[s.id] && typeof m.stocks[s.id].price === "number"));
+const hasStocks = m => !!(m && m.stocks && STOCKS.every(s => {
+  const q = m.stocks[s.id];
+  // float 对不上说明是旧经济（每股 24.8、一手 100 股那套），必须重建
+  return q && typeof q.price === "number" && Number(q.float) === Number(s.float);
+}));
 
 function cleanAcc(a) {
   const out = { ...newAccount(), ...(a || {}) };
@@ -773,9 +781,11 @@ function render() {
     const left = Math.max(0, Number(ev.left) || 0);
     const total = Math.max(1, Number(ev.ticks) || 1);
     const sub = ev.desc && ev.desc !== ev.title ? " · " + ev.desc : "";
-    const more = gmEvs.length > 1 ? `（另有 ${gmEvs.length - 1} 条）` : "";
+    const more = isGM && gmEvs.length > 1 ? `（另有 ${gmEvs.length - 1} 条）` : "";
     $("#evGmText").textContent = ev.title + sub + more;
+    // 剩下的跳数只有城主看得见，玩家只看到事件还在
     $("#evGmLeft").textContent = `还剩 ${left}/${total} 跳`;
+    $("#evGmLeft").style.display = isGM ? "" : "none";
     gmRow.hidden = false;
   } else {
     gmRow.hidden = true;
