@@ -701,11 +701,19 @@ export function stepMarket(m) {
     const moves = [];
     for (const id in (e.imp || {})) {
       const st = stocks[id], s0 = e.start && Number(e.start[id]);
-      if (st && s0 > 0) moves.push({ id, pct: Number(((st.price / s0 - 1) * 100).toFixed(2)) });
+      if (st && s0 > 0) moves.push([id, Number(((st.price / s0 - 1) * 100).toFixed(2))]);
     }
-    if (moves.length) history.push({ at: tick, title: e.title, ticks: e.total, mins: e.mins || 0, trust: e.trust || {}, plan: e.imp || {}, moves });
+    if (moves.length) {
+      // 紧凑字段：房间 metadata 一共只有 16kB，标题/目标/实际都压成短键
+      const mv = moves, pl = {};
+      for (const id in (e.imp || {})) pl[id] = Number(e.imp[id]);
+      const tr = {};
+      for (const id in (e.trust || {})) if (Number(e.trust[id])) tr[id] = Number(e.trust[id]);
+      history.push({ a: tick, t: e.title, n: e.total, m: e.mins || 0, p: pl, mv, ...(Object.keys(tr).length ? { tr } : {}) });
+    }
   }
-  if (history.length > 20) history = history.slice(-20);
+  // 不按条数砍，按字节砍：历史最多占 7kB，剩下的留给行情和账户
+  while (history.length > 60 || JSON.stringify(history).length > 3500) history.shift();
 
   const out = {
     v: 5, econ: 27, barSec: Number(m.barSec) > 0 ? Number(m.barSec) : DEFAULT_BAR_SEC, tick, running: m.running !== false, vol: volMul,
@@ -760,7 +768,8 @@ export function unrealizedOf(acc, m) {
 }
 
 export function equityOf(acc, m) {
-  return (acc.cash || 0) + positionValue(acc, m);
+  // 待交收的钱也是资产：卖出瞬间不能因为“钱还在路上”就显示权益暴跌
+  return (acc.cash || 0) + positionValue(acc, m) + pendingTotal(acc);
 }
 
 export function feeOf(notional) {
