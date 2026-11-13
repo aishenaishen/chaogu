@@ -1,19 +1,34 @@
 <!doctype html>
 <meta charset="utf-8">
 <script type="module">
-import OBR from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3/+esm";
 import { MKT_KEY, TICK_MS, newMarket, stepMarket } from "./shared.js";
+
+const SDK_URL = "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3/+esm";
+
+// SDK 偶发加载失败时一直重试，别让行情因为一次网络抖动就停摆
+async function loadSDK() {
+  for (;;) {
+    try {
+      const sdk = await import(SDK_URL);
+      const o = sdk.default || sdk;
+      if (o && typeof o.onReady === "function") return o;
+    } catch (e) { /* 继续重试 */ }
+    await new Promise(r => setTimeout(r, 3000));
+  }
+}
+
+const OBR = await loadSDK();
 
 OBR.onReady(async () => {
   const role = await OBR.player.getRole();
-  if (role !== "GM") return;
+  if (role !== "GM") return;   // 只让 GM 的浏览器推进行情，避免多人重复跳
 
   const md = await OBR.room.getMetadata();
   if (!md[MKT_KEY]) await OBR.room.setMetadata({ [MKT_KEY]: newMarket() });
 
   setInterval(async () => {
     const cur = (await OBR.room.getMetadata())[MKT_KEY];
-    if (!cur || !cur.running) return;
+    if (!cur || cur.running === false) return;
     await OBR.room.setMetadata({ [MKT_KEY]: stepMarket(cur) });
   }, TICK_MS);
 });

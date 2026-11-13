@@ -164,8 +164,8 @@ export function stepMarket(m) {
 }
 
 // ── 账户：做多股票，T+0，佣金万 0.55、最低 5 金 ────────────────
-export function newAccount() {
-  return { cash: 0, deposited: 0, realized: 0, positions: {} };
+export function newAccount(cash = 0) {
+  return { cash, deposited: cash, realized: 0, positions: {} };
 }
 
 export function positionValue(acc, m) {

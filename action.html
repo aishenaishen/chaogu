@@ -130,6 +130,15 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
   opacity:0;transform:translateY(6px);transition:.18s;pointer-events:none;z-index:70}
 #toast.on{opacity:1;transform:none}
 
+.connbar{display:none;align-items:center;gap:9px;flex:none;padding:8px 12px;border-radius:12px;
+  background:#fdeef0;border:1px solid #f6d3d8;color:#a63d4b;font-size:11.5px;line-height:1.45}
+.connbar.on{display:flex}
+.connbar b{font-weight:700;flex:none}
+.connbar span{flex:1}
+.connbar button{flex:none;border:1px solid #e9bcc4;background:#fff;border-radius:8px;
+  padding:4px 10px;color:#a63d4b;font-weight:600}
+.ver{font-size:10px;color:#b9c4bf}
+
 /* ---------- GM 控制台 ---------- */
 .mask{position:fixed;inset:0;z-index:60;display:none;place-items:center;
   background:rgba(16,32,26,.44);backdrop-filter:blur(2px)}
@@ -175,6 +184,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
+    <span class="ver">v2.0.1</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -182,6 +192,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
   </header>
 
   <main>
+    <div class="connbar" id="connbar"><b>没连上 Owlbear：</b><span id="connmsg"></span><button id="btnRetry">重试</button></div>
     <section class="ledger card">
       <div>
         <div class="lt">我的股票账户 <span class="tag" id="accTag">试算资金</span></div>
@@ -274,9 +285,9 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="srow"><label>玩家资金</label><span class="shint">直接改可用资金，改完立刻生效</span></div>
     <div class="plist" id="plist"><div class="shint">读取玩家列表中…</div></div>
     <div class="srow"><label></label>
-      <input class="inp w" id="giveAll" type="number" value="500" step="100">
+      <input class="inp w" id="giveAll" type="number" value="5000" step="500">
       <button class="btn" id="giveAllGo">给所有玩家发钱</button>
-      <span class="shint">负数就是扣钱</span>
+      <span class="shint">一手 100 股约 600～3,100 金，负数就是扣钱</span>
     </div>
 
     <div class="sep"></div>
@@ -338,6 +349,21 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
   </div>
 </div>
 
+<div class="mask" id="helpMask">
+  <div class="sheet" style="width:560px">
+    <h3>怎么玩</h3>
+    <div class="sub">深水城六方产业在交易所挂牌，红涨绿跌，涨跌停 ±10%。</div>
+    <div class="srow"><label>玩家</label><span class="shint">左侧选股票 → 右侧填股数（1 手 = 100 股）→ 买入 / 卖出。T+0，随时能平。佣金 0.055%，最低 5 金。</span></div>
+    <div class="srow"><label></label><span class="shint">账户里的钱由城主发放。亏了不是爆仓，是欠了城里某位债主的钱。</span></div>
+    <div class="sep"></div>
+    <div class="srow"><label>城主</label><span class="shint">点右上「GM 控制台」：发钱、暂停行情、拉砸个股、投放事件。事件会显示在玩家面板的黄色条里。</span></div>
+    <div class="srow"><label></label><span class="shint">行情由 OBR 后台推进；只要城主在房间里，面板关掉也照常跳。</span></div>
+    <div class="srow" style="justify-content:flex-end;margin-top:12px">
+      <button class="btn dark" id="helpClose">知道了</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script type="module">
@@ -353,11 +379,41 @@ const pct = v => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
 const volTxt = v => Math.round(v).toLocaleString("en-US") + " 手";
 
 /* ---------- 运行环境 ---------- */
+const SDK_URL = "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3/+esm";
+const QS = new URLSearchParams(location.search);
+// 在 OBR 里，动作面板一定跑在 iframe 中；直接打开文件则是顶层窗口
+const isEmbedded = (() => { try { return window.parent !== window; } catch (e) { return true; } })();
+const FORCE_DEMO = QS.has("demo");
+const FORCE_OBR = QS.has("obr");
+const DEMO_CASH = 5000;   // 试算模式的开局资金：够买 1~7 手
+
 let OBR = null;
-try {
-  const sdk = await import("https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3/+esm");
-  OBR = sdk.default;
-} catch (e) { OBR = null; }
+let sdkError = "";
+
+function connError(msg) {
+  const bar = $("#connbar");
+  if (!bar) return;
+  bar.classList.add("on");
+  $("#connmsg").textContent = msg;
+  const pill = $("#modePill");
+  pill.classList.remove("demo");
+  pill.style.background = "#fdeef0";
+  pill.style.color = "#a63d4b";
+  pill.innerHTML = "<i style='background:#d66'></i>未连 OBR";
+}
+
+async function loadSDK() {
+  for (let i = 0; i < 3; i++) {
+    try {
+      const sdk = await import(SDK_URL + (i ? "?retry=" + i : ""));
+      const o = sdk.default || sdk;
+      if (o && typeof o.onReady === "function") return o;
+      sdkError = "SDK 返回的对象没有 onReady";
+    } catch (e) { sdkError = (e && e.message) || String(e); }
+    await new Promise(r => setTimeout(r, 600));
+  }
+  return null;
+}
 
 const LS_KEY = ACC_KEY + "/demo";
 let DEMO = true, obrMode = false, isGM = false, myId = "demo", myName = "老雅诺";
@@ -405,7 +461,7 @@ async function loadMarket() {
 /* ---------- 账户读写（房间元数据，GM 可改） ---------- */
 async function loadAcc() {
   if (DEMO) {
-    try { acc = JSON.parse(localStorage.getItem(LS_KEY)) || newAccount(); } catch (e) { acc = newAccount(); }
+    try { acc = JSON.parse(localStorage.getItem(LS_KEY)) || newAccount(DEMO_CASH); } catch (e) { acc = newAccount(DEMO_CASH); }
     return;
   }
   const md = await OBR.room.getMetadata();
@@ -736,7 +792,9 @@ $("#qty").oninput = calc;
 $("#btnBuy").onclick = () => trade(1);
 $("#btnSell").onclick = () => trade(-1);
 $("#btnClose").onclick = closeAll;
-$("#btnHelp").onclick = () => toast("先看板块 → 选股 → 填股数 → 买入。红涨绿跌，每手 100 股。");
+$("#btnHelp").onclick = () => $("#helpMask").classList.add("on");
+$("#helpClose").onclick = () => $("#helpMask").classList.remove("on");
+$("#helpMask").addEventListener("click", e => { if (e.target.id === "helpMask") $("#helpMask").classList.remove("on"); });
 document.querySelectorAll("[data-q]").forEach(b => {
   b.onclick = () => {
     const q = b.dataset.q;
@@ -813,11 +871,12 @@ $("#qty").addEventListener("change", calc);
 async function bootDemo() {
   if (demoTimer) return;
   DEMO = true;
+  $("#connbar").classList.remove("on");
   $("#modePill").classList.add("demo");
   $("#modePill").innerHTML = "<i></i>本地试算";
   $("#accTag").textContent = "试算资金";
-  isGM = true;
-  $("#btnGM").style.display = "";
+  isGM = !isEmbedded;
+  $("#btnGM").style.display = isGM ? "" : "none";
   await loadMarket(); await loadAcc(); render();
   demoTimer = setInterval(() => {
     if (mkt && mkt.running !== false) { mkt = stepMarket(mkt); }
@@ -825,40 +884,64 @@ async function bootDemo() {
   }, TICK_MS);
 }
 
-async function bootOBR() {
-  let started = false;
-  // 不在 OBR 里打开时，onReady 可能永远不来：2.5 秒后退回本地试算
-  const fallback = setTimeout(() => { if (!started) { started = true; bootDemo(); } }, 2500);
-  await OBR.onReady(async () => {
-    if (started) return;
-    started = true; clearTimeout(fallback);
-    DEMO = false; obrMode = true;
-    $("#modePill").classList.remove("demo");
-    $("#modePill").innerHTML = "<i></i>实盘";
-    $("#accTag").textContent = "实盘资金";
-    myId = await OBR.player.getId();
-    myName = (await OBR.player.getName()) || "玩家";
-    const role = await OBR.player.getRole();
-    isGM = role === "GM";
-    $("#btnGM").style.display = isGM ? "" : "none";
-    await loadMarket(); await loadAcc(); render();
-    if (isGM) { gmSync(); refreshPlayers(); }
+async function connect() {
+  DEMO = false; obrMode = true;
+  $("#connbar").classList.remove("on");
+  $("#modePill").classList.remove("demo");
+  $("#modePill").style.background = "";
+  $("#modePill").style.color = "";
+  $("#modePill").innerHTML = "<i></i>实盘";
+  $("#accTag").textContent = "实盘资金";
+  myId = await OBR.player.getId();
+  myName = (await OBR.player.getName()) || "玩家";
+  const role = await OBR.player.getRole();
+  isGM = role === "GM";
+  $("#btnGM").style.display = isGM ? "" : "none";
+  await loadMarket(); await loadAcc(); render();
+  if (isGM) { gmSync(); refreshPlayers(); }
 
-    OBR.room.onMetadataChange(md => {
-      if (md[MKT_KEY]) { mkt = md[MKT_KEY]; render(); if (isGM) gmSync(); }
-      if (md[ACC_KEY] && md[ACC_KEY].players?.[myId]) {
-        const mine = md[ACC_KEY].players[myId];
-        if (JSON.stringify(mine) !== JSON.stringify(acc)) { acc = { ...newAccount(), ...mine }; render(); }
-      }
-    });
+  OBR.room.onMetadataChange(md => {
+    if (md[MKT_KEY]) { mkt = md[MKT_KEY]; render(); if (isGM) gmSync(); }
+    if (md[ACC_KEY] && md[ACC_KEY].players?.[myId]) {
+      const mine = md[ACC_KEY].players[myId];
+      if (JSON.stringify(mine) !== JSON.stringify(acc)) { acc = { ...newAccount(), ...mine }; render(); }
+    }
   });
+  toast("已连上 Owlbear，行情由 GM 的后台推进。");
 }
 
-if (OBR) {
-  try { await bootOBR(); } catch (e) { await bootDemo(); }
-} else {
-  await bootDemo();
+async function main() {
+  $("#btnRetry").onclick = () => location.reload();
+
+  // 本地预览（直接打开文件）：立即进试算，不必干等 OBR
+  if ((!isEmbedded && !FORCE_OBR) || FORCE_DEMO) { await bootDemo(); return; }
+
+  const sdk = await loadSDK();
+  if (!sdk) {
+    connError("SDK 加载失败（" + (sdkError || "网络不可达") + "）。先确认浏览器能打开 cdn.jsdelivr.net，再点重试。");
+    return;
+  }
+  OBR = sdk;
+
+  let started = false;
+  const timer = setTimeout(() => {
+    if (started) return;
+    connError("SDK 已加载，但 12 秒内没握手成功。通常是 OBR 缓存了旧文件：Extensions 里把本扩展删掉，再 Add 一次。");
+  }, 12000);
+
+  try {
+    await OBR.onReady(async () => {
+      if (started) return;
+      started = true; clearTimeout(timer);
+      try { await connect(); }
+      catch (e) { connError("握手后初始化失败：" + ((e && e.message) || e)); }
+    });
+  } catch (e) {
+    connError("onReady 出错：" + ((e && e.message) || e));
+  }
 }
+
+await main();
 </script>
 </body>
 </html>
