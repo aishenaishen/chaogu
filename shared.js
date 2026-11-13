@@ -21,12 +21,12 @@ export const CROWD_NEUTRAL = 50;  // 拥挤度中性值
 
 // ── 六个「上市产业」──────────────────────────────────────────────
 export const STOCKS = [
-  { id: "KSLT", code: "600101", name: "卡萨兰特银行", sector: "金融", p0: 6.40, dp: 2, vol: 0.0058, drift: 0.00002, float: 20000 },
-  { id: "SNSA", code: "600102", name: "珊娜萨货运",   sector: "物流", p0: 1.25, dp: 2, vol: 0.0170, drift: 0.00004, float: 60000 },
-  { id: "MNSN", code: "600103", name: "曼松商会",     sector: "贸易", p0: 2.80, dp: 2, vol: 0.0105, drift: 0.00001, float: 30000 },
-  { id: "JLRS", code: "600104", name: "贾拉索船务",   sector: "航运", p0: 0.85, dp: 2, vol: 0.0190, drift: -0.00002, float: 50000 },
-  { id: "GLHD", code: "600105", name: "格拉汉德置业", sector: "地产", p0: 1.95, dp: 2, vol: 0.0135, drift: 0.00005, float: 40000 },
-  { id: "WDPA", code: "600106", name: "深水城港务",   sector: "公用", p0: 5.10, dp: 2, vol: 0.0068, drift: 0.00001, float: 25000 }
+  { id: "KSLT", code: "600101", name: "卡萨兰特银行", sector: "金融", p0: 6.40, dp: 2, vol: 0.0058, drift: 0.00002, float: 20000, trust: 50 },
+  { id: "SNSA", code: "600102", name: "珊娜萨货运",   sector: "物流", p0: 1.25, dp: 2, vol: 0.0170, drift: 0.00004, float: 60000, trust: 50 },
+  { id: "MNSN", code: "600103", name: "曼松商会",     sector: "贸易", p0: 2.80, dp: 2, vol: 0.0105, drift: 0.00001, float: 30000, trust: 50 },
+  { id: "JLRS", code: "600104", name: "贾拉索船务",   sector: "航运", p0: 0.85, dp: 2, vol: 0.0190, drift: -0.00002, float: 50000, trust: 50 },
+  { id: "GLHD", code: "600105", name: "格拉汉德置业", sector: "地产", p0: 1.95, dp: 2, vol: 0.0135, drift: 0.00005, float: 40000, trust: 50 },
+  { id: "WDPA", code: "600106", name: "深水城港务",   sector: "公用", p0: 5.10, dp: 2, vol: 0.0068, drift: 0.00001, float: 25000, trust: 50 }
 ];
 
 export const stockById = id => STOCKS.find(s => s.id === id);export const clampSpeed = v => Math.min(SPEED_MAX, Math.max(SPEED_MIN, Math.round(Number(v) || TICK_MS)));
@@ -35,34 +35,34 @@ export const fmt = (v, dp) => Number(v).toFixed(dp);
 
 // ── 事件预设：跟战役章节挂钩，GM 一点就砸/拉 ─────────────────────
 export const PRESETS = [
-  { id: "fireball", title: "火球炸城", desc: "巨魔颅骨巷一声巨响，半条街化为焦土。", imp: { GLHD: -9, KSLT: 2, WDPA: -1.5 }, ticks: 6 },
-  { id: "bankrun", title: "卡萨兰特银行挤兑", desc: "兑付窗口排起长队，贵族们连夜转移金库。", imp: { KSLT: -8, GLHD: -3, WDPA: -2 }, ticks: 8 },
-  { id: "fishbowl", title: "珊娜萨的鱼缸被抢", desc: "有人闯进巢穴，把希尔加连鱼带缸搬走了。", imp: { SNSA: -7, MNSN: 1 }, ticks: 6 },
-  { id: "shipwreck", title: "曼松的货船沉了", desc: "三艘商船在风暴中失踪，货主们堵在商会门口。", imp: { MNSN: -6, JLRS: 3 }, ticks: 8 },
-  { id: "blockade", title: "贾拉索封锁港口", desc: "船队横在防波堤外，进出港的船都得交买路钱。", imp: { JLRS: 5, WDPA: -4, MNSN: -2 }, ticks: 8 },
-  { id: "caravan", title: "商队节开幕", desc: "全城放假三天，码头和酒馆的流水翻了一倍。", imp: { WDPA: 2, MNSN: 2, GLHD: 1 }, ticks: 10 },
-  { id: "strike", title: "公会日大罢工", desc: "码头工人封了栈桥，货栈的银子晒在太阳底下。", imp: { GLHD: -4, WDPA: -3, JLRS: 2 }, ticks: 8 },
-  { id: "taxcut", title: "蒙面领主议会减税", desc: "港口税下调，消息比传令官跑得还快。", imp: { KSLT: 3, MNSN: 2, WDPA: 3 }, ticks: 10 },
-  { id: "gangwar", title: "散塔林火并", desc: "两派在码头区当街开打，银条信用跟着抖。", imp: { SNSA: -5, JLRS: -2, KSLT: 1 }, ticks: 6 },
-  { id: "goldflow", title: "金龙大量流入", desc: "前领主的金库传闻坐实，全城都在找买家。", imp: { KSLT: 4, GLHD: 3, MNSN: 2 }, ticks: 10 },
+  { id: "fireball", title: "火球炸城", desc: "巨魔颅骨巷一声巨响，半条街化为焦土。", imp: { GLHD: -9, KSLT: 2, WDPA: -1.5 }, ticks: 18 },
+  { id: "bankrun", title: "卡萨兰特银行挤兑", desc: "兑付窗口排起长队，贵族们连夜转移金库。", imp: { KSLT: -8, GLHD: -3, WDPA: -2 }, ticks: 24 },
+  { id: "fishbowl", title: "珊娜萨的鱼缸被抢", desc: "有人闯进巢穴，把希尔加连鱼带缸搬走了。", imp: { SNSA: -7, MNSN: 1 }, ticks: 18 },
+  { id: "shipwreck", title: "曼松的货船沉了", desc: "三艘商船在风暴中失踪，货主们堵在商会门口。", imp: { MNSN: -6, JLRS: 3 }, ticks: 24 },
+  { id: "blockade", title: "贾拉索封锁港口", desc: "船队横在防波堤外，进出港的船都得交买路钱。", imp: { JLRS: 5, WDPA: -4, MNSN: -2 }, ticks: 24 },
+  { id: "caravan", title: "商队节开幕", desc: "全城放假三天，码头和酒馆的流水翻了一倍。", imp: { WDPA: 2, MNSN: 2, GLHD: 1 }, ticks: 30 },
+  { id: "strike", title: "公会日大罢工", desc: "码头工人封了栈桥，货栈的银子晒在太阳底下。", imp: { GLHD: -4, WDPA: -3, JLRS: 2 }, ticks: 24 },
+  { id: "taxcut", title: "蒙面领主议会减税", desc: "港口税下调，消息比传令官跑得还快。", imp: { KSLT: 3, MNSN: 2, WDPA: 3 }, ticks: 30 },
+  { id: "gangwar", title: "散塔林火并", desc: "两派在码头区当街开打，银条信用跟着抖。", imp: { SNSA: -5, JLRS: -2, KSLT: 1 }, ticks: 18 },
+  { id: "goldflow", title: "金龙大量流入", desc: "前领主的金库传闻坐实，全城都在找买家。", imp: { KSLT: 4, GLHD: 3, MNSN: 2 }, ticks: 30 },
 
   // ── 大事件：绑剧情用的重锤，幅度大、不封板 ──────────────────
-  { id: "eyes_lost", title: "第三只眼不见了", desc: "戈罗尔之石的三只眼同一天失窃，几家商号的保险柜连夜换了锁。", imp: { SNSA: -16, MNSN: -6, KSLT: -4 }, ticks: 8 },
-  { id: "sansa_rampage", title: "珊娜萨血洗码头", desc: "鱼缸空了之后，珊娜萨的打手把整条码头街掀了一遍。", imp: { SNSA: -24, JLRS: -10, WDPA: -8, KSLT: -4 }, ticks: 6 },
-  { id: "manshoon_leak", title: "曼松的名字上了头版", desc: "《深水城之眼》头版印着曼松的真名，商会股价当场崩了。", imp: { MNSN: -26, KSLT: 8, GLHD: 6 }, ticks: 8 },
-  { id: "cassalanter_due", title: "卡萨兰特的契约到期", desc: "九十九万九千九百九十九金币的账单摆在桌上，午夜之前必须清。", imp: { KSLT: -30, GLHD: -12, WDPA: -7 }, ticks: 6 },
-  { id: "jarlaxle_sails", title: "贾拉索的船队离港", desc: "二十艘船同时起锚，港口只剩下空泊位和押金的传说。", imp: { JLRS: -22, WDPA: -10, MNSN: -5 }, ticks: 10 },
-  { id: "dragon_wakes", title: "红龙醒了", desc: "宝库深处的呼吸声传到了街上，所有人同时想起自己欠了谁的钱。", imp: { KSLT: -18, MNSN: -20, GLHD: -25, SNSA: -15, JLRS: -12, WDPA: -10 }, ticks: 6 },
-  { id: "hoard_found", title: "五十万龙金见光", desc: "前领主的金库被搬上街，搬运工从早上排到第二天凌晨。", imp: { KSLT: 14, GLHD: 18, MNSN: 10, WDPA: 8 }, ticks: 12 },
-  { id: "masked_raid", title: "蒙面领主全城戒严", desc: "城门落锁，巡逻队挨家挨户敲门，生意全停。", imp: { GLHD: -18, SNSA: -14, JLRS: -12, KSLT: 4 }, ticks: 8 },
-  { id: "harper_audit", title: "竖琴手抄了账房", desc: "账本被一页页摊在桌上，几家商号的名字被红笔圈了出来。", imp: { KSLT: -12, MNSN: -10, SNSA: 6 }, ticks: 6 },
-  { id: "nimblewright", title: "灵巧莱特连环案", desc: "第五起爆炸之后，北区的房租和地价一起塌了。", imp: { GLHD: -14, KSLT: -6, SNSA: 4 }, ticks: 8 },
+  { id: "eyes_lost", title: "第三只眼不见了", desc: "戈罗尔之石的三只眼同一天失窃，几家商号的保险柜连夜换了锁。", imp: { SNSA: -16, MNSN: -6, KSLT: -4 }, ticks: 24 },
+  { id: "sansa_rampage", title: "珊娜萨血洗码头", desc: "鱼缸空了之后，珊娜萨的打手把整条码头街掀了一遍。", imp: { SNSA: -24, JLRS: -10, WDPA: -8, KSLT: -4 }, ticks: 18 },
+  { id: "manshoon_leak", title: "曼松的名字上了头版", desc: "《深水城之眼》头版印着曼松的真名，商会股价当场崩了。", imp: { MNSN: -26, KSLT: 8, GLHD: 6 }, ticks: 24 },
+  { id: "cassalanter_due", title: "卡萨兰特的契约到期", desc: "九十九万九千九百九十九金币的账单摆在桌上，午夜之前必须清。", imp: { KSLT: -30, GLHD: -12, WDPA: -7 }, ticks: 18 },
+  { id: "jarlaxle_sails", title: "贾拉索的船队离港", desc: "二十艘船同时起锚，港口只剩下空泊位和押金的传说。", imp: { JLRS: -22, WDPA: -10, MNSN: -5 }, ticks: 30 },
+  { id: "dragon_wakes", title: "红龙醒了", desc: "宝库深处的呼吸声传到了街上，所有人同时想起自己欠了谁的钱。", imp: { KSLT: -18, MNSN: -20, GLHD: -25, SNSA: -15, JLRS: -12, WDPA: -10 }, ticks: 18 },
+  { id: "hoard_found", title: "五十万龙金见光", desc: "前领主的金库被搬上街，搬运工从早上排到第二天凌晨。", imp: { KSLT: 14, GLHD: 18, MNSN: 10, WDPA: 8 }, ticks: 36 },
+  { id: "masked_raid", title: "蒙面领主全城戒严", desc: "城门落锁，巡逻队挨家挨户敲门，生意全停。", imp: { GLHD: -18, SNSA: -14, JLRS: -12, KSLT: 4 }, ticks: 24 },
+  { id: "harper_audit", title: "竖琴手抄了账房", desc: "账本被一页页摊在桌上，几家商号的名字被红笔圈了出来。", imp: { KSLT: -12, MNSN: -10, SNSA: 6 }, ticks: 18 },
+  { id: "nimblewright", title: "灵巧莱特连环案", desc: "第五起爆炸之后，北区的房租和地价一起塌了。", imp: { GLHD: -14, KSLT: -6, SNSA: 4 }, ticks: 24 },
 
   // ── 中小事件：日常插曲，幅度温和 ────────────────────────────
-  { id: "trollskull_open", title: "巨魔颅骨酒馆开张", desc: "新酒馆第一晚就把半条街的客人吸走了。", imp: { GLHD: 9, WDPA: 3 }, ticks: 10 },
-  { id: "gold_ship", title: "金龙船进港", desc: "三桅船压着吃水线进港，甲板上全是箱子。", imp: { WDPA: 12, JLRS: 9, MNSN: 6 }, ticks: 10 },
-  { id: "shipwrights_ball", title: "造船匠舞会", desc: "全城的船长和寡妇挤在同一个舞厅，订单签到了明年。", imp: { JLRS: 7, WDPA: 5, KSLT: 3 }, ticks: 12 },
-  { id: "double_festival", title: "双塞节双游行", desc: "两场游行撞在同一天，酒馆、马车和赌坊一起爆满。", imp: { WDPA: 6, MNSN: 5, JLRS: 4, GLHD: 3 }, ticks: 12 }
+  { id: "trollskull_open", title: "巨魔颅骨酒馆开张", desc: "新酒馆第一晚就把半条街的客人吸走了。", imp: { GLHD: 9, WDPA: 3 }, ticks: 30 },
+  { id: "gold_ship", title: "金龙船进港", desc: "三桅船压着吃水线进港，甲板上全是箱子。", imp: { WDPA: 12, JLRS: 9, MNSN: 6 }, ticks: 30 },
+  { id: "shipwrights_ball", title: "造船匠舞会", desc: "全城的船长和寡妇挤在同一个舞厅，订单签到了明年。", imp: { JLRS: 7, WDPA: 5, KSLT: 3 }, ticks: 36 },
+  { id: "double_festival", title: "双塞节双游行", desc: "两场游行撞在同一天，酒馆、马车和赌坊一起爆满。", imp: { WDPA: 6, MNSN: 5, JLRS: 4, GLHD: 3 }, ticks: 36 }
 ];
 
 // 每个预设自带的拥挤度冲击：恐慌、丑闻压拥挤，利好、抢购推拥挤
@@ -75,6 +75,130 @@ const PRESET_CROWD = {
   shipwrights_ball: 10, double_festival: 15
 };
 for (const p of PRESETS) p.crowd = PRESET_CROWD[p.id] ?? 0;
+
+// 事件时长（按真实分钟算，触发时按当时速度换算成跳数）与信心冲击
+// 参照现实：丑闻 = 长期信用受损；救市/公开账本/白衣骑士 = 信心修复
+const PRESET_META = {
+  fireball:         { durMin: 12, trust: { GLHD: -8 } },
+  bankrun:          { durMin: 15, trust: { KSLT: -12 } },
+  fishbowl:         { durMin: 10, trust: { SNSA: -6 } },
+  shipwreck:        { durMin: 12, trust: { MNSN: -5 } },
+  blockade:         { durMin: 20, trust: { JLRS: -8, WDPA: -4 } },
+  caravan:          { durMin: 8,  trust: { WDPA: 2, MNSN: 2 } },
+  strike:           { durMin: 15, trust: { GLHD: -3, WDPA: -2 } },
+  taxcut:           { durMin: 10, trust: { KSLT: 3, MNSN: 2 } },
+  gangwar:          { durMin: 12, trust: { SNSA: -5 } },
+  goldflow:         { durMin: 12, trust: { KSLT: 4 } },
+
+  eyes_lost:        { durMin: 20, trust: { SNSA: -8, MNSN: -4 } },
+  sansa_rampage:    { durMin: 25, trust: { SNSA: -25, JLRS: -6, WDPA: -4 } },
+  manshoon_leak:    { durMin: 30, trust: { MNSN: -30, KSLT: 4 } },
+  cassalanter_due:  { durMin: 30, trust: { KSLT: -30 } },
+  jarlaxle_sails:   { durMin: 30, trust: { JLRS: -15, WDPA: -6 } },
+  dragon_wakes:     { durMin: 30, trust: { KSLT: -20, MNSN: -18, GLHD: -18, SNSA: -15, JLRS: -12, WDPA: -10 } },
+  hoard_found:      { durMin: 30, trust: { KSLT: 12, GLHD: 10, MNSN: 8 } },
+  masked_raid:      { durMin: 25, trust: { GLHD: -12, SNSA: -8 } },
+  harper_audit:     { durMin: 20, trust: { KSLT: -6, MNSN: -6 } },
+  nimblewright:     { durMin: 20, trust: { GLHD: -10 } },
+  trollskull_open:  { durMin: 8,  trust: { GLHD: 3 } },
+  gold_ship:        { durMin: 8,  trust: { WDPA: 4, JLRS: 3 } },
+  shipwrights_ball: { durMin: 8,  trust: { JLRS: 3, WDPA: 2 } },
+  double_festival:  { durMin: 10, trust: { WDPA: 3, MNSN: 2 } }
+};
+
+// 自救 / 利好大事件：现实中「公开账本、财团接盘、监管注资」那一套
+const EXTRA_PRESETS = [
+  { id: "cassalanter_bailout", title: "卡萨兰特公开账本并注资", desc: "账本摊在广场上，家族当场掏钱补窟窿，挤兑的人慢慢散了。", imp: { KSLT: 16, GLHD: 6 }, trust: { KSLT: 22, GLHD: 4 }, durMin: 30, crowd: 40 },
+  { id: "masked_rescue", title: "蒙面领主救市基金", desc: "议会连夜通过救市案，金库的车队开进了银行街。", imp: { KSLT: 9, MNSN: 8, GLHD: 7, SNSA: 5, JLRS: 5, WDPA: 6 }, trust: { KSLT: 10, MNSN: 8, GLHD: 8, WDPA: 8 }, durMin: 30, crowd: 45 },
+  { id: "white_knight", title: "白衣骑士收购格拉汉德", desc: "一个不肯露面的财团溢价接走了全部债务，地价止跌。", imp: { GLHD: 18 }, trust: { GLHD: 16 }, durMin: 20, crowd: 35 },
+  { id: "harbor_bond", title: "港口重建债券发行", desc: "城主担保、商会认购，码头在三个月里重新立了起来。", imp: { WDPA: 12, JLRS: 5 }, trust: { WDPA: 12, JLRS: 4 }, durMin: 20, crowd: 30 },
+  { id: "guild_pact", title: "商会互保联盟", desc: "几家商号签了互保契，谁倒下其他人兜底——至少纸面上如此。", imp: { MNSN: 10, SNSA: 8, JLRS: 4 }, trust: { MNSN: 8, SNSA: 6 }, durMin: 20, crowd: 25 },
+  { id: "dragon_slain", title: "红龙被逐出宝库", desc: "一队不要命的冒险者把龙引出了地道，全城放了一夜烟花。", imp: { KSLT: 8, MNSN: 9, GLHD: 10, SNSA: 8, JLRS: 7, WDPA: 8 }, trust: { KSLT: 8, MNSN: 8, GLHD: 10, SNSA: 6, JLRS: 6, WDPA: 8 }, durMin: 30, crowd: 40 },
+  { id: "sansa_reform", title: "珊娜萨换了掌柜", desc: "新掌柜第一件事是把账目钉在门上，血洗码头那页被撕了。", imp: { SNSA: 10 }, trust: { SNSA: 10 }, durMin: 15, crowd: 20 },
+  { id: "jarlaxle_contract", title: "贾拉索与城主签约", desc: "船队挂上了深水城的旗，走私泊位一次洗白。", imp: { JLRS: 12, WDPA: 4 }, trust: { JLRS: 12 }, durMin: 20, crowd: 30 }
+];
+for (const p of PRESETS) {
+  const meta = PRESET_META[p.id];
+  if (meta) Object.assign(p, { durMin: meta.durMin, trust: meta.trust });
+}
+// 大事件（1 小时）：好坏都补足，方便城主按「谁干的」挑
+const BIG_EVENTS = [
+  // ── 坏事 · 1 小时 ──
+  { id: "goldheist_exposed", side: "bad", owner: "KSLT", title: "金龙劫案曝光", desc: "五十万龙金的账被捅到街上，全城银行门口排起长队。", imp: { KSLT: -24, GLHD: -12, MNSN: -8, WDPA: -6 }, trust: { KSLT: -26, GLHD: -14, MNSN: -8 }, durMin: 60, crowd: -60 },
+  { id: "fishbowl_smashed", side: "bad", owner: "SNSA", title: "珊娜萨的鱼缸被砸", desc: "有人把希尔加的金鱼缸从三楼扔了下来，珊娜萨疯了。", imp: { SNSA: -30, MNSN: -8 }, trust: { SNSA: -32 }, durMin: 60, crowd: -55 },
+  { id: "black_ledger_leaked", side: "bad", owner: "MNSN", title: "曼松的黑账本落到竖琴手手里", desc: "账本上每一个名字都被念了出来，商会的门一整天没开。", imp: { MNSN: -28, KSLT: -6 }, trust: { MNSN: -32, KSLT: -4 }, durMin: 60, crowd: -50 },
+  { id: "cassalanter_fire", side: "bad", owner: "KSLT", title: "卡萨兰特庄园起火", desc: "火从书房烧到宴会厅，救火的人说看见有人往里泼油。", imp: { KSLT: -25, GLHD: -10 }, trust: { KSLT: -24, GLHD: -8 }, durMin: 60, crowd: -45 },
+  { id: "jarlaxle_seized", side: "bad", owner: "JLRS", title: "贾拉索的船队被扣", desc: "城防以走私为由扣了整支船队，泊位上全是空缆绳。", imp: { JLRS: -26, WDPA: -10 }, trust: { JLRS: -22, WDPA: -6 }, durMin: 60, crowd: -40 },
+  { id: "glhd_tower_collapse", side: "bad", owner: "GLHD", title: "格拉汉德的塔塌了", desc: "新盖的塔在验收当天塌了半边，压死了三个工匠。", imp: { GLHD: -30, SNSA: -6 }, trust: { GLHD: -30 }, durMin: 60, crowd: -50 },
+  { id: "dock_strike_big", side: "bad", owner: "WDPA", title: "码头大罢工", desc: "搬运工把吊机锁了，货船在湾里排了三天。", imp: { WDPA: -24, SNSA: -12, MNSN: -8 }, trust: { WDPA: -20, SNSA: -8 }, durMin: 60, crowd: -45 },
+  { id: "masked_infight", side: "bad", owner: "WDPA", title: "蒙面领主内斗", desc: "议会里有人把另一派的账本摔在桌上，会议开了通宵。", imp: { KSLT: -10, MNSN: -10, GLHD: -10, WDPA: -10, SNSA: -8, JLRS: -8 }, trust: { KSLT: -10, MNSN: -10, GLHD: -10, WDPA: -10 }, durMin: 60, crowd: -35 },
+  { id: "zhentarim_massacre", side: "bad", owner: "MNSN", title: "散塔林会血洗商会", desc: "商会夜宴上死了七个人，血从门缝流到街上。", imp: { MNSN: -22, SNSA: -10, JLRS: -6 }, trust: { MNSN: -24, SNSA: -10 }, durMin: 60, crowd: -45 },
+  { id: "plague", side: "bad", owner: "WDPA", title: "深水城瘟疫", desc: "码头区先病倒的，然后是整个北区；城门关了。", imp: { KSLT: -12, MNSN: -14, GLHD: -16, SNSA: -12, JLRS: -14, WDPA: -18 }, trust: { KSLT: -12, MNSN: -14, GLHD: -16, SNSA: -12, JLRS: -12, WDPA: -18 }, durMin: 60, crowd: -60 },
+
+  // ── 好事 · 1 小时 ──
+  { id: "hoard_deposited", side: "good", owner: "KSLT", title: "五十万龙金入库", desc: "金库的门开了一条缝，全城的债主突然都不急了。", imp: { KSLT: 14, GLHD: 10, MNSN: 8, SNSA: 6, JLRS: 6, WDPA: 8 }, trust: { KSLT: 16, GLHD: 12, MNSN: 8 }, durMin: 60, crowd: 55 },
+  { id: "city_audit", side: "good", owner: "WDPA", title: "城主公开审计", desc: "审计官把账本一页页念完，街上的谣言反而少了。", imp: { KSLT: 10, MNSN: 8, GLHD: 8, WDPA: 10 }, trust: { KSLT: 14, MNSN: 10, GLHD: 10, WDPA: 14 }, durMin: 60, crowd: 35 },
+  { id: "sansa_peace", side: "good", owner: "SNSA", title: "珊娜萨与商会和解", desc: "两家人坐在同一张桌子上签了字，码头上的刀收了起来。", imp: { SNSA: 14, MNSN: 8, WDPA: 4 }, trust: { SNSA: 14, MNSN: 6 }, durMin: 60, crowd: 35 },
+  { id: "manshoon_fall", side: "good", owner: "MNSN", title: "曼松倒台", desc: "商会连夜换了掌柜，旧账一把火烧了个干净。", imp: { MNSN: 18, KSLT: 4 }, trust: { MNSN: 20, KSLT: 4 }, durMin: 60, crowd: 40 },
+  { id: "cassalanter_peace", side: "good", owner: "KSLT", title: "卡萨兰特与竖琴手和解", desc: "双方在码头仓库见了面，出来时都没有带武器。", imp: { KSLT: 15, MNSN: 5 }, trust: { KSLT: 18, MNSN: 4 }, durMin: 60, crowd: 35 },
+  { id: "jarlaxle_pardon", side: "good", owner: "JLRS", title: "贾拉索获赦", desc: "城主签了赦令，船队挂旗的那天码头挤满了人。", imp: { JLRS: 16, WDPA: 6 }, trust: { JLRS: 14, WDPA: 4 }, durMin: 60, crowd: 40 },
+  { id: "harbor_expansion", side: "good", owner: "WDPA", title: "港口扩建竣工", desc: "新栈桥能同时停十二艘大船，第一艘进港时全城去看。", imp: { WDPA: 15, JLRS: 8, MNSN: 5 }, trust: { WDPA: 14, JLRS: 6 }, durMin: 60, crowd: 45 },
+  { id: "north_rebuild", side: "good", owner: "GLHD", title: "北区重建完成", desc: "烧掉的街区重新立了起来，房租却还没涨。", imp: { GLHD: 16, WDPA: 4 }, trust: { GLHD: 15 }, durMin: 60, crowd: 40 },
+  { id: "dragon_insurance", side: "good", owner: "KSLT", title: "龙金保险基金成立", desc: "银行街凑了一笔钱，专门赔给被龙和火灾祸害的商户。", imp: { KSLT: 8, MNSN: 6, GLHD: 6, WDPA: 6, SNSA: 4, JLRS: 4 }, trust: { KSLT: 10, MNSN: 8, GLHD: 8, WDPA: 8 }, durMin: 60, crowd: 35 },
+  { id: "festival_amnesty", side: "good", owner: "WDPA", title: "双塞节大赦", desc: "城主下令大赦，欠债的、逃税的、打架的都回家过节了。", imp: { KSLT: 6, MNSN: 5, GLHD: 5, WDPA: 6, SNSA: 5, JLRS: 5 }, trust: { KSLT: 8, MNSN: 6, GLHD: 6, WDPA: 8, SNSA: 6, JLRS: 6 }, durMin: 60, crowd: 40 }
+];
+PRESETS.push(...BIG_EVENTS);
+
+// 每个预设的「好坏 · 哪个势力」标签，GM 下拉按这个分组
+const PRESET_TAG = {
+  fireball: ["bad","GLHD"], bankrun: ["bad","KSLT"], fishbowl: ["bad","SNSA"], shipwreck: ["bad","MNSN"],
+  blockade: ["bad","JLRS"], caravan: ["good","WDPA"], strike: ["bad","WDPA"], taxcut: ["good","KSLT"],
+  gangwar: ["bad","SNSA"], goldflow: ["good","KSLT"], eyes_lost: ["bad","SNSA"], sansa_rampage: ["bad","SNSA"],
+  manshoon_leak: ["bad","MNSN"], cassalanter_due: ["bad","KSLT"], jarlaxle_sails: ["bad","JLRS"],
+  dragon_wakes: ["bad","GLHD"], hoard_found: ["good","KSLT"], masked_raid: ["bad","GLHD"], harper_audit: ["bad","KSLT"],
+  nimblewright: ["bad","GLHD"], trollskull_open: ["good","GLHD"], gold_ship: ["good","WDPA"],
+  shipwrights_ball: ["good","JLRS"], double_festival: ["good","WDPA"],
+  cassalanter_bailout: ["good","KSLT"], masked_rescue: ["good","WDPA"], white_knight: ["good","GLHD"],
+  harbor_bond: ["good","WDPA"], guild_pact: ["good","MNSN"], dragon_slain: ["good","GLHD"],
+  sansa_reform: ["good","SNSA"], jarlaxle_contract: ["good","JLRS"]
+};
+for (const p of PRESETS) {
+  const tag = PRESET_TAG[p.id];
+  if (tag) { p.side = tag[0]; p.owner = tag[1]; }
+  if (!p.side) p.side = "bad";
+  if (!p.owner) p.owner = "WDPA";
+}
+
+// 补齐各势力的「好事」：之前偏科，珊娜萨/曼松/贾拉索/格拉汉德的好消息太少
+const BALANCE_EVENTS = [
+  // 珊娜萨货运
+  { id: "sansa_truce", side: "good", owner: "SNSA", title: "珊娜萨与竖琴手停战", desc: "两边在码头仓库划了界，刀口朝下。", imp: { SNSA: 12, MNSN: 3 }, trust: { SNSA: 12 }, durMin: 30, crowd: 30 },
+  { id: "sansa_orphanage", side: "good", owner: "SNSA", title: "珊娜萨捐建孤儿院", desc: "码头区最破的那条街上，新院子挂起了珊娜萨的旗。", imp: { SNSA: 8, WDPA: 3 }, trust: { SNSA: 14 }, durMin: 20, crowd: 25 },
+  { id: "sansa_landmark", side: "good", owner: "SNSA", title: "珊娜萨的鱼缸成了城标", desc: "那条金鱼上了明信片，游客排队来看。", imp: { SNSA: 10, WDPA: 4 }, trust: { SNSA: 10 }, durMin: 30, crowd: 30 },
+  { id: "sansa_warehouse", side: "good", owner: "SNSA", title: "珊娜萨开放码头仓储", desc: "空了三年的仓库重新堆满货，搬运工有了活干。", imp: { SNSA: 9, WDPA: 4, MNSN: 3 }, trust: { SNSA: 10, WDPA: 4 }, durMin: 30, crowd: 25 },
+
+  // 曼松商会
+  { id: "manshoon_tender", side: "good", owner: "MNSN", title: "曼松商会公开招标", desc: "标书贴满了公告栏，连小商号也领到了份额。", imp: { MNSN: 10, GLHD: 3 }, trust: { MNSN: 10 }, durMin: 20, crowd: 25 },
+  { id: "guild_apprentice", side: "good", owner: "MNSN", title: "商会设立学徒基金", desc: "第一批学徒进了账房，街上少了些闲汉。", imp: { MNSN: 7, WDPA: 3 }, trust: { MNSN: 12 }, durMin: 20, crowd: 20 },
+  { id: "manshoon_reorg", side: "good", owner: "MNSN", title: "曼松商会改组", desc: "新章程把旧掌柜的亲信全清了出去。", imp: { MNSN: 14, KSLT: 3 }, trust: { MNSN: 14 }, durMin: 30, crowd: 30 },
+  { id: "guild_harbor_deal", side: "good", owner: "MNSN", title: "商会与港务签长期仓储协议", desc: "十年的租约，码头和商会各让了一步。", imp: { MNSN: 9, WDPA: 4 }, trust: { MNSN: 8, WDPA: 6 }, durMin: 20, crowd: 20 },
+
+  // 贾拉索船务
+  { id: "jarlaxle_route", side: "good", owner: "JLRS", title: "船队开辟新航线", desc: "第一艘船从南边回来时，舱里全是没见过的货。", imp: { JLRS: 12, WDPA: 5, MNSN: 4 }, trust: { JLRS: 10, WDPA: 4 }, durMin: 30, crowd: 30 },
+  { id: "jarlaxle_relief", side: "good", owner: "JLRS", title: "贾拉索捐船赈灾", desc: "三艘船改运粮食，船长骂了一路，货还是送到了。", imp: { JLRS: 9, WDPA: 5 }, trust: { JLRS: 14, WDPA: 6 }, durMin: 20, crowd: 25 },
+  { id: "jarlaxle_seat", side: "good", owner: "JLRS", title: "航运公会承认船队席位", desc: "挂了三十年的黑船，第一次有了正式席位。", imp: { JLRS: 10, MNSN: 3 }, trust: { JLRS: 12 }, durMin: 30, crowd: 25 },
+
+  // 格拉汉德置业
+  { id: "glhd_school", side: "good", owner: "GLHD", title: "格拉汉德捐地建学堂", desc: "北区最贵的那块地，划给了学堂。", imp: { GLHD: 10, WDPA: 3 }, trust: { GLHD: 14 }, durMin: 20, crowd: 25 },
+  { id: "glhd_compensation", side: "good", owner: "GLHD", title: "塌塔事故赔偿到位", desc: "死伤工匠的家眷领到了钱，没有再上街。", imp: { GLHD: 8, SNSA: 2 }, trust: { GLHD: 12 }, durMin: 30, crowd: 20 },
+  { id: "glhd_market", side: "good", owner: "GLHD", title: "北区新市场开业", desc: "空地上支起两百个摊位，租金头三个月免了。", imp: { GLHD: 11, WDPA: 3, MNSN: 3 }, trust: { GLHD: 10 }, durMin: 30, crowd: 30 },
+
+  // 贾拉索的坏消息也补一条，免得坏事偏少
+  { id: "jarlaxle_reef", side: "bad", owner: "JLRS", title: "船队触礁", desc: "领航员把暗礁看成了浪花，三艘船的货全泡了。", imp: { JLRS: -20, WDPA: -5 }, trust: { JLRS: -14 }, durMin: 30, crowd: -35 }
+];
+PRESETS.push(...BALANCE_EVENTS);
+
+export const clampTrust = v => Math.max(0, Math.min(100, Number(v) || 0));
 
 export const clampCrowd = v => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
 
@@ -432,7 +556,7 @@ export function newMarket() {
     const q = Number(s.p0.toFixed(s.dp));
     const v0 = Math.max(2, Math.round(s.float / 200 * (0.5 + Math.random())));
     stocks[s.id] = {
-      price: q, prevClose: q, halt: false, crowd: CROWD_NEUTRAL, flow: 0, float: s.float,
+      price: q, prevClose: q, halt: false, crowd: CROWD_NEUTRAL, flow: 0, float: s.float, trust: s.trust ?? 50,
       cur: { o: q, h: q, l: q, c: q, v: v0 },
       bars: [], bt: 0
     };
@@ -453,6 +577,7 @@ export function stepMarket(m) {
   // 事件：总冲击按持续跳数摊平，逐跳施加
   // free=true 的是城主投放的事件：不受涨跌停限制（黑天鹅）；随机快讯照常受限
   const events = [];
+  const finished = [];
   const driftN = {}, driftF = {};
   for (const e of (m.events || [])) {
     const total = Math.max(1, Number(e.ticks) || 1);
@@ -464,6 +589,7 @@ export function stepMarket(m) {
       bucket[id] = (bucket[id] || 0) + logDrift(e.imp[id], total);
     }
     if (left > 0) events.push({ ...e, ticks: total, left });
+    else if (e.free) finished.push({ ...e, total });
   }
 
   let news = m.news || "", newsLeft = Math.max(0, (m.newsLeft || 0) - 1);
@@ -496,7 +622,14 @@ export function stepMarket(m) {
     }
     const crowdPush = ((crowd - CROWD_NEUTRAL) / CROWD_NEUTRAL) * 0.0012;
     const volBoost = 1 + Math.max(0, crowd - CROWD_NEUTRAL) / 120;
-    let ret = s.vol * volMul * volBoost * gauss() + s.drift + crowdPush + (driftN[s.id] || 0);
+    // 信心（trust）：丑闻会长期压低估值和波动的恢复力；0～100，50 为中性
+    let trust = Number(st.trust);
+    if (!Number.isFinite(trust)) trust = 50;
+    const trustPush = ((trust - 50) / 50) * 0.0005;   // 信誉差 → 长期阴跌；信誉好 → 长期溢价
+    const trustVol = 1 + Math.max(0, 50 - trust) / 120; // 不被信任的股票更容易暴涨暴跌
+    let ret = s.vol * volMul * volBoost * trustVol * gauss() + s.drift + crowdPush + trustPush + (driftN[s.id] || 0);
+    // 信誉会缓慢回归中性：每天（480 跳）约回 4 点，所以一次丑闻要养好几天
+    trust = Math.max(0, Math.min(100, trust + (trust < 50 ? 0.008 : trust > 50 ? -0.008 : 0)));
     // 拥挤到 75 以上再遇到下跌：踩踏，跌幅放大
     if (crowd > 75 && ret < 0) ret *= 1.35;
     const free = driftF[s.id] || 0;   // 城主事件：黑天鹅，不封板
@@ -527,14 +660,26 @@ export function stepMarket(m) {
       cur = { o: price, h: price, l: price, c: price, v: 0 };
       bt = 0;
     }
-    stocks[s.id] = { price, prevClose: newDay ? price : st.prevClose, halt: false, crowd, flow: 0, cur, bars, bt };
+    stocks[s.id] = { price, prevClose: newDay ? price : st.prevClose, halt: false, crowd, flow: 0, float: s.float, trust, cur, bars, bt };
   }
+
+  // 事件回溯：城主事件走完时，记下持续跳数和各股票的实际涨跌
+  let history = Array.isArray(m.history) ? m.history.slice(-19) : [];
+  for (const e of finished) {
+    const moves = [];
+    for (const id in (e.imp || {})) {
+      const st = stocks[id], s0 = e.start && Number(e.start[id]);
+      if (st && s0 > 0) moves.push({ id, pct: Number(((st.price / s0 - 1) * 100).toFixed(2)) });
+    }
+    if (moves.length) history.push({ at: tick, title: e.title, ticks: e.total, mins: e.mins || 0, trust: e.trust || {}, moves });
+  }
+  if (history.length > 20) history = history.slice(-20);
 
   const out = {
     v: 4, tick, running: m.running !== false, vol: volMul,
     autoNews: m.autoNews !== false, speed: clampSpeed(m.speed),
     limit: m.limit !== false,
-    news, newsLeft, events, stocks, steppedAt: Date.now(),
+    news, newsLeft, events, history, stocks, steppedAt: Date.now(),
     indexPrev: m.indexPrev ?? m.index ?? 1000
   };
   out.index = indexOf(out);
@@ -614,4 +759,3 @@ export function shortLoss(pos, price) {
 export function needsCover(pos, price) {
   return isShort(pos) && shortLoss(pos, price) >= (-pos.shares) * pos.cost * COVER_LINE;
 }
-

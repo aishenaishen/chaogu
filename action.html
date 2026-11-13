@@ -185,6 +185,10 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
 .evrow{display:flex;align-items:center;gap:7px;font-size:11.5px;padding:5px 8px;border-radius:9px;background:#f7f8f4}
 .evrow .en{flex:1;color:#41554e}
 .evrow .el{font-size:10px;color:#9a8a66}
+.evlog{display:flex;flex-direction:column;gap:3px;max-height:126px;overflow:auto}
+.evlog .lg{display:flex;gap:8px;font-size:11px;color:#5d6d66;padding:3px 7px;border-radius:7px;background:#faf9f4}
+.evlog .lg b{color:#3f4f48;font-weight:600}
+.evlog .up{color:#c9432f}.evlog .dn{color:#12855c}
 
 @media (max-width:900px){
   .grid{grid-template-columns:1fr;min-height:0}
@@ -200,7 +204,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v2.7.3</span>
+    <span class="ver">v3.0.1</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -255,6 +259,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
           <span>昨收 <b id="cPrev">—</b></span>
           <span>成交 <b id="cVol">—</b></span>
           <span>拥挤 <b id="cCrowd">—</b></span>
+          <span>信心 <b id="cTrust">—</b></span>
         </div>
         <div class="cstats cfloat">
           <span>流通 <b id="cFloat">—</b></span>
@@ -378,8 +383,9 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="sep"></div>
     <div class="srow"><label>事件</label>
       <select class="sel" id="gmPreset"></select>
+      <div class="shint" id="gmPresetInfo" style="margin-top:4px"></div>
       <button class="btn dark" id="gmFire">触发</button>
-      <span class="shint">冲击按持续跳数摊平</span>
+      <span class="shint">冲击按持续分钟摊平</span>
     </div>
     <div class="srow"><label>自定义</label>
       <input class="inp grow" id="gmEvTitle" placeholder="事件标题，例如：玩家炸了鱼缸">
@@ -392,13 +398,16 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     </div>
     <div class="srow"><label></label>
       <input class="inp w" id="gmEvPct" type="number" value="-5" step="1"><span class="shint">%</span>
-      <input class="inp w" id="gmEvTicks" type="number" value="6" step="1" min="1"><span class="shint">跳</span>
+      <input class="inp w" id="gmEvMin" type="number" value="15" step="1" min="1" max="180"><span class="shint">分钟</span>
+      <input class="inp w" id="gmEvTrust" type="number" value="-10" step="5" min="-50" max="50"><span class="shint">信心</span>
       <input class="inp w" id="gmEvCrowd" type="number" value="0" step="5" min="-100" max="100"><span class="shint">拥挤</span>
       <button class="btn" id="gmEvAdd">加入事件</button>
       <button class="btn" id="gmEvClear">清空事件</button>
       <button class="btn" id="gmEvStep">推一拍</button>
     </div>
     <div class="evlist" id="evlist"></div>
+    <div class="shint" style="margin-top:10px">事件回溯（走完的城主事件：持续跳数 与 实际涨跌）</div>
+    <div class="evlog" id="evlog"></div>
     <div class="shint" id="gmDbg"></div>
 
     <div class="srow" style="justify-content:flex-end;margin-top:14px">
@@ -599,7 +608,7 @@ function seedBars(m) {
 async function applyMarket(fn) {
   if (DEMO) {
     mkt = fn(structuredClone(mkt)); render();
-    if (isGM && $("#gmMask").classList.contains("on")) gmSync();
+    if (isGM && $("#gmMask").classList.contains("on")) { try { gmSync(); } catch (e) {} }
     return;
   }
   const md = await OBR.room.getMetadata();
@@ -615,7 +624,11 @@ async function applyMarket(fn) {
     if (Date.now() - lastWriteWarn > 10000) { lastWriteWarn = Date.now(); toast("行情写入失败：" + ((e && e.message) || e)); }
     throw e;
   }
-  mkt = next; render(); if (isGM) gmSync();
+  mkt = next;
+  try { render(); } catch (e) { if (Date.now() - lastWriteWarn > 4000) { lastWriteWarn = Date.now(); toast("渲染失败：" + (e && e.message)); } }
+  if (isGM) {
+    try { gmSync(); } catch (e) { const d = $("#gmDbg"); if (d) d.textContent = "GM 刷新失败：" + (e && e.message); }
+  }
 }
 let lastWriteWarn = 0;
 
@@ -759,6 +772,8 @@ function render() {
     : `<b>0</b> 股 · 成本 <b>—</b>`;
   $("#pPending").textContent = money(pendingTotal(acc));
   $("#cCrowd").textContent = crowdLabel(st.crowd);
+  const trustN = Number.isFinite(Number(st.trust)) ? Number(st.trust) : 50;
+  $("#cTrust").textContent = Math.round(trustN) + (trustN >= 65 ? " 稳" : trustN <= 35 ? " 虚" : " 平");
   const totalF = Number(st.float) || s.float || 0;
   const freeF = Math.max(0, totalF - (heldMap[pid] || 0));
   $("#cFloat").textContent = sharesTxt(totalF);
@@ -784,7 +799,10 @@ function render() {
     const more = isGM && gmEvs.length > 1 ? `（另有 ${gmEvs.length - 1} 条）` : "";
     $("#evGmText").textContent = ev.title + sub + more;
     // 剩下的跳数只有城主看得见，玩家只看到事件还在
-    $("#evGmLeft").textContent = `还剩 ${left}/${total} 跳`;
+    const spMin = Number(ev.tickMs) || clampSpeed(mkt.speed);
+    const leftMin = Math.max(0, Math.ceil(left * spMin / 60000));
+    const totalMin = Math.max(1, Math.round(total * spMin / 60000));
+    $("#evGmLeft").textContent = `还剩 ${leftMin}/${totalMin} 分`;
     $("#evGmLeft").style.display = isGM ? "" : "none";
     gmRow.hidden = false;
   } else {
@@ -1057,8 +1075,32 @@ function gmSync() {
   $("#gmPrice").placeholder = st ? fmt(st.price, s.dp) : "指定价";
 
   $("#evlist").innerHTML = (mkt.events || []).length
-    ? mkt.events.map(e => `<div class="evrow"><span class="en">${e.title}</span><span class="el">还剩 ${Math.max(0, Math.round(Number(e.left ?? e.ticks) || 0))}/${Math.max(1, Math.round(Number(e.ticks) || 1))} 跳</span></div>`).join("")
+    ? mkt.events.map(e => {
+      const sp = Number(e.tickMs) || clampSpeed(mkt.speed);
+      const leftMin = Math.max(0, Math.ceil((Number(e.left ?? e.ticks) || 0) * sp / 60000));
+      const totalMin = Math.max(1, Math.round((Number(e.ticks) || 1) * sp / 60000));
+      return `<div class="evrow"><span class="en">${e.title}</span><span class="el">还剩 ${leftMin}/${totalMin} 分</span></div>`;
+    }).join("")
     : `<div class="shint">当前没有进行中的事件。</div>`;
+  const log = $("#evlog");
+  if (log) {
+    try {
+      const h = (mkt.history || []).slice(-8).reverse();
+      log.innerHTML = h.length ? h.map(x => {
+        const mv = (x.moves || []).map(m => {
+          const nm = ((STOCKS.find(s => s.id === m.id) || {}).name || m.id).replace(/^深水城/, "").slice(0, 4);
+          return `<span class="${m.pct >= 0 ? "up" : "dn"}">${nm} ${m.pct >= 0 ? "+" : ""}${m.pct}%</span>`;
+        }).join(" ");
+        const dur = x.mins ? x.mins + " 分钟" : x.ticks + " 跳";
+        const tchg = Object.keys(x.trust || {}).filter(id => x.trust[id]).map(id => {
+          const nm = ((STOCKS.find(s => s.id === id) || {}).name || id).replace(/^深水城/, "").slice(0, 4);
+          const d = x.trust[id];
+          return `<span class="${d >= 0 ? "up" : "dn"}">${nm} 信心${d >= 0 ? "+" : ""}${d}</span>`;
+        }).join(" ");
+        return `<div class="lg"><b>${x.title}</b><span>${dur}</span>${mv}${tchg}</div>`;
+      }).join("") : `<div class="shint">还没有走完的城主事件。</div>`;
+    } catch (e) { log.textContent = "回溯渲染失败：" + e.message; }
+  }
   const dbg = $("#gmDbg");
   if (dbg) dbg.textContent = `tick ${mkt.tick || 0} · 事件 ${(mkt.events || []).length} 条 · 行情${mkt.running === false ? "已暂停" : "在跑"} · 最近推进：${mkt.lastBy || "未知"}`;
 }
@@ -1115,20 +1157,61 @@ function shockPct(sign) {
 }
 
 function fireEvent(ev) {
+  const sp = clampSpeed(mkt?.speed);
+  // 时长按真实分钟算：30 分钟就是 30 分钟，跟当前速度无关
+  const mins = Math.max(0.5, Number(ev.durMin) || 0);
+  const ticks = mins ? Math.max(1, Math.min(12000, Math.round(mins * 60000 / sp))) : Math.max(1, Number(ev.ticks) || 1);
   applyMarket(m => {
-    m.events = (m.events || []).concat([{ ...ev, left: ev.ticks, id: "ev-" + Date.now().toString(36) }]);
+    const start = {};
+    for (const id of Object.keys(ev.imp || {})) { const s = m.stocks && m.stocks[id]; if (s) start[id] = s.price; }
+    // 信心冲击立刻生效：丑闻让这只股票长期抬不起头，救市则相反
+    const trust = {};
+    for (const id of Object.keys(ev.trust || {})) {
+      const st = m.stocks && m.stocks[id];
+      if (!st) continue;
+      const d = Number(ev.trust[id]) || 0;
+      st.trust = Math.max(0, Math.min(100, (Number(st.trust) || 50) + d));
+      trust[id] = d;
+    }
+    m.events = (m.events || []).concat([{ ...ev, ticks, mins, tickMs: sp, trust, start, left: ticks, id: "ev-" + Date.now().toString(36) }]);
     if (ev.crowd) addCrowd(m, Object.keys(ev.imp || {}), ev.crowd);
     m.news = ev.title + (ev.desc ? "：" + ev.desc : "");
-    m.newsLeft = Math.max(6, ev.ticks);
+    m.newsLeft = Math.max(6, Math.min(ticks, 120));
     return m;
   });
-  SFX.event(); toast("事件已触发：" + ev.title + (ev.crowd ? "（拥挤 " + (ev.crowd > 0 ? "+" : "") + ev.crowd + "）" : ""));
+  SFX.event(); toast("事件已触发：" + ev.title + "（" + (mins ? mins + " 分钟" : ticks + " 跳") + (ev.crowd ? "，拥挤 " + (ev.crowd > 0 ? "+" : "") + ev.crowd : "") + "）");
 }
 
 /* ---------- 启动 ---------- */
 buildStocks();
 $("#gmStock").innerHTML = STOCKS.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
-$("#gmPreset").innerHTML = PRESETS.map((p, i) => `<option value="${i}">${p.title}</option>`).join("");
+  const OWNER_ORDER = ["KSLT","SNSA","MNSN","JLRS","GLHD","WDPA"];
+  const ownerName = id => ((STOCKS.find(s => s.id === id) || {}).name || id).replace(/^深水城/, "");
+  function buildPresetOptions() {
+    const sel = $("#gmPreset");
+    const groups = {};
+    PRESETS.forEach((p, i) => {
+      const key = (p.side === "good" ? "1" : "0") + "|" + String(OWNER_ORDER.indexOf(p.owner)).padStart(2, "0") + "|" + p.owner;
+      (groups[key] = groups[key] || []).push({ p, i });
+    });
+    sel.innerHTML = Object.keys(groups).sort().map(key => {
+      const g = groups[key];
+      const side = g[0].p.side === "good" ? "好事" : "坏事";
+      const label = `${side} · ${ownerName(g[0].p.owner)}（${g.length}）`;
+      return `<optgroup label="${label}">` + g.map(({ p, i }) => `<option value="${i}">${p.title}（${p.durMin || 6} 分）</option>`).join("") + `</optgroup>`;
+    }).join("");
+    showPresetInfo();
+  }
+  function showPresetInfo() {
+    const p = PRESETS[Number($("#gmPreset").value)];
+    const info = $("#gmPresetInfo");
+    if (!p || !info) return;
+    const worst = Object.keys(p.imp || {}).map(id => `${ownerName(id)} ${p.imp[id] > 0 ? "+" : ""}${p.imp[id]}%`).join(" · ");
+    const tr = Object.keys(p.trust || {}).map(id => `${ownerName(id)} 信心${p.trust[id] > 0 ? "+" : ""}${p.trust[id]}`).join(" · ");
+    info.textContent = `${p.side === "good" ? "利好" : "利空"} · ${p.durMin} 分钟｜${worst}${tr ? "｜" + tr : ""}`;
+  }
+  buildPresetOptions();
+  $("#gmPreset").onchange = showPresetInfo;
 $("#gmStocksChips").innerHTML = STOCKS.map(s =>
   `<button class="chip" data-gs="${s.id}">${s.name}</button>`).join("");
 $("#gmStocksChips").querySelectorAll("[data-gs]").forEach(b => {
@@ -1252,7 +1335,7 @@ $("#gmSetPrice").onclick = () => {
 };
 $("#gmFire").onclick = () => {
   const p = PRESETS[Number($("#gmPreset").value)];
-  if (p) fireEvent({ title: p.title, desc: p.desc, imp: p.imp, ticks: p.ticks, crowd: p.crowd, free: true });
+  if (p) fireEvent({ title: p.title, desc: p.desc, imp: p.imp, ticks: p.ticks, durMin: p.durMin, trust: p.trust, crowd: p.crowd, free: true });
 };
 $("#gmEvAdd").onclick = () => {
   const title = $("#gmEvTitle").value.trim();
@@ -1263,14 +1346,16 @@ $("#gmEvAdd").onclick = () => {
     imp[b.dataset.gs] = pct;
   });
   if (!Object.keys(imp).length) return toast("至少选一只受影响的股票。");
-  fireEvent({ title, desc: $("#gmEvDesc").value.trim(), imp, ticks: Math.max(1, Number($("#gmEvTicks").value) || 1), crowd: clampCrowd(Number($("#gmEvCrowd").value) || 0), free: true });
+  const trust = {};
+  for (const id of Object.keys(imp)) trust[id] = Number($("#gmEvTrust").value) || 0;
+  fireEvent({ title, desc: $("#gmEvDesc").value.trim(), imp, durMin: Math.max(1, Number($("#gmEvMin").value) || 10), trust, crowd: clampCrowd(Number($("#gmEvCrowd").value) || 0), free: true });
   if (Math.abs(pct) >= 20) toast("幅度 " + pct + "%：城主事件不封板，价格会被直接打穿板外。");
   $("#gmEvTitle").value = ""; $("#gmEvDesc").value = "";
   $("#gmStocksChips").querySelectorAll(".chip").forEach(b => b.classList.remove("on"));
 };
-$("#gmEvClear").onclick = () => {
-  applyMarket(m => { m.events = []; m.news = ""; m.newsLeft = 0; return m; });
-  SFX.ok(); toast("已清空进行中的事件。");
+$("#gmEvClear").onclick = async () => {
+  await applyMarket(m => { m.events = []; m.news = ""; m.newsLeft = 0; return m; });
+  SFX.ok(); toast("已清空进行中的事件（回溯记录保留）。");
 };
 $("#gmEvStep").onclick = () => {
   applyMarket(m => { const n = stepMarket(m); n.lastBy = "手动"; return n; });
@@ -1351,6 +1436,7 @@ async function connect() {
   toast("已连上 Owlbear，行情由你的面板推进（关掉面板后由后台接手）。");
 }
 
+window.__diag = () => ({ tick: mkt && mkt.tick, isGM, DEMO, driver: !!driverTimer, speed: mkt && mkt.speed, steppedAgo: mkt && mkt.steppedAt ? Date.now() - mkt.steppedAt : null, running: mkt && mkt.running, lastBy: mkt && mkt.lastBy, hist: mkt && (mkt.history || []).length, evs: mkt && (mkt.events || []).map(e => [e.title.slice(0,4), e.left, e.ticks]) });
 let driverTimer = null;
 function updateDriver() {
   clearTimeout(driverTimer);
