@@ -513,8 +513,7 @@ export function newAccount(cash = 0) {
   return { cash, deposited: cash, realized: 0, positions: {} };
 }
 
-export function positionValue(acc, m) {
-  let v = 0;
+export function positionValue(acc, m) {  let v = 0;
   for (const id in acc.positions) {
     const pos = acc.positions[id], st = m?.stocks?.[id];
     if (pos && st) v += pos.shares * st.price;
@@ -538,3 +537,29 @@ export function equityOf(acc, m) {
 export function feeOf(notional) {
   return Math.max(FEE_MIN, Math.round(notional * FEE_RATE * 100) / 100);
 }
+
+// ── 融券做空 ────────────────────────────────────────────────
+export const SHORT_MARGIN = 0.5;   // 开空保证金 = 名义的 50%
+export const COVER_LINE = 0.65;    // 浮亏达到开仓名义的 65% 强制平仓
+
+export function isShort(pos) {
+  return !!pos && pos.shares < 0;
+}
+
+export function marginUsed(acc) {
+  let m = 0;
+  for (const id in acc.positions) {
+    const p = acc.positions[id];
+    if (p && p.shares < 0) m += (-p.shares) * p.cost * SHORT_MARGIN;
+  }
+  return m;
+}
+
+export function shortLoss(pos, price) {
+  return pos && pos.shares < 0 ? (price - pos.cost) * (-pos.shares) : 0;
+}
+
+export function needsCover(pos, price) {
+  return isShort(pos) && shortLoss(pos, price) >= (-pos.shares) * pos.cost * COVER_LINE;
+}
+
