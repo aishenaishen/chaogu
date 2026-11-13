@@ -184,7 +184,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v2.1.1</span>
+    <span class="ver">v2.4.0</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -937,7 +937,7 @@ $("#gmSetPrice").onclick = () => {
 };
 $("#gmFire").onclick = () => {
   const p = PRESETS[Number($("#gmPreset").value)];
-  if (p) fireEvent({ title: p.title, desc: p.desc, imp: p.imp, ticks: p.ticks });
+  if (p) fireEvent({ title: p.title, desc: p.desc, imp: p.imp, ticks: p.ticks, free: true });
 };
 $("#gmEvAdd").onclick = () => {
   const title = $("#gmEvTitle").value.trim();
@@ -949,7 +949,7 @@ $("#gmEvAdd").onclick = () => {
   });
   if (!Object.keys(imp).length) return toast("至少选一只受影响的股票。");
   fireEvent({ title, desc: $("#gmEvDesc").value.trim(), imp, ticks: Math.max(1, Number($("#gmEvTicks").value) || 1), free: true });
-  if (Math.abs(pct) > 10) toast("幅度超过涨跌停 ±10%：一天最多走 10%，多出的部分会被截断。");
+  if (Math.abs(pct) >= 20) toast("幅度 " + pct + "%：城主事件不封板，价格会被直接打穿板外。");
   $("#gmEvTitle").value = ""; $("#gmEvDesc").value = "";
   $("#gmStocksChips").querySelectorAll(".chip").forEach(b => b.classList.remove("on"));
 };
