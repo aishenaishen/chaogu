@@ -184,7 +184,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v2.0.7</span>
+    <span class="ver">v2.1.0</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -302,6 +302,8 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
       <button class="chip" data-vol="1">正常</button>
       <button class="chip" data-vol="2.5">狂暴</button>
       <button class="btn" id="gmReopen">开盘（重置昨收）</button>
+      <button class="chip" id="gmLimit">涨跌停 ±10%</button>
+      <span class="shint">关掉后日常涨跌不再封板；城主事件本来就不封板</span>
     </div>
     <div class="srow"><label>速度</label>
       <button class="chip" data-speed="1000">1 秒</button>
@@ -475,18 +477,30 @@ async function applyMarket(fn) {
   }
   const md = await OBR.room.getMetadata();
   const cur = md[MKT_KEY] || newMarket();
-  const next = fn(structuredClone(cur));
+  const next = slimMarket(fn(structuredClone(cur)));
   try {
-    await OBR.room.setMetadata({ [MKT_KEY]: next });
+    // OBR 房间 metadata 总共只有 16kB；写超时/被拒时必须显式失败，否则推进链会卡死
+    await Promise.race([
+      OBR.room.setMetadata({ [MKT_KEY]: next }),
+      new Promise((_, rej) => setTimeout(() => rej(new Error("写入超时（房间数据可能超过 16kB）")), 5000))
+    ]);
   } catch (e) {
-    // 写不进去（权限/频率限制）：不假装成功，交给下一拍重试
     if (Date.now() - lastWriteWarn > 10000) { lastWriteWarn = Date.now(); toast("行情写入失败：" + ((e && e.message) || e)); }
     throw e;
   }
-  // 不等 metadata 事件回传，先就地刷新一次，GM 点完立刻看到结果
   mkt = next; render(); if (isGM) gmSync();
 }
 let lastWriteWarn = 0;
+
+// 房间总共 16kB：K 线超了就先砍 K 线，保住价格和事件
+function slimMarket(m) {
+  if (JSON.stringify(m).length <= 14000) return m;
+  for (const cap of [12, 4]) {
+    for (const s of STOCKS) { const st = m.stocks?.[s.id]; if (st && st.bars) st.bars = st.bars.slice(-cap); }
+    if (JSON.stringify(m).length <= 14000) return m;
+  }
+  return m;
+}
 
 async function loadMarket() {
   if (DEMO) { mkt = seedBars(newMarket()); return; }
@@ -642,7 +656,7 @@ function drawChart() {
   const st = mkt?.stocks?.[pid];
   if (!st) return;
   const s = stockById(pid), dp = s.dp;
-  const series = (st.bars || []).concat([st.cur]);
+  const series = (st.bars || []).map(b => Array.isArray(b) ? { o: b[0], h: b[1], l: b[2], c: b[3] } : b).concat([st.cur]);
   const pos = acc.positions[pid];
 
   const padL = 10, padR = 62, padT = 16, padB = 22;
@@ -772,6 +786,7 @@ function gmSync() {
     b.classList.toggle("on", Math.abs(Number(b.dataset.vol) - (mkt.vol || 1)) < 0.01));
   $("#gmAutoNews").textContent = mkt.autoNews !== false ? "开" : "关";
   $("#gmAutoNews").classList.toggle("on", mkt.autoNews !== false);
+  $("#gmLimit").classList.toggle("on", mkt.limit !== false);
   const s = stockById($("#gmStock").value || pid);
   const st = mkt.stocks[s.id];
   $("#gmHaltState").textContent = st && st.halt ? "停牌中" : "正常交易";
@@ -827,7 +842,7 @@ function shockPct(sign) {
     if (!st) return m;
     st.price = Number(Math.max(0.01, st.price * (1 + pctv / 100)).toFixed(s.dp));
     st.cur = { ...st.cur, c: st.price, h: Math.max(st.cur.h, st.price), l: Math.min(st.cur.l, st.price) };
-    st.bars = (st.bars || []).concat([{ ...st.cur }]).slice(-40);
+    st.bars = (st.bars || []).concat([[st.cur.o, st.cur.h, st.cur.l, st.cur.c]]).slice(-30);
     st.cur = { o: st.price, h: st.price, l: st.price, c: st.price, v: 0 };
     st.bt = 0;
     return m;
@@ -901,6 +916,11 @@ $("#gmReopen").onclick = () => applyMarket(m => {
 $("#gmHalt").onclick = () => applyMarket(m => {
   const id = $("#gmStock").value; m.stocks[id].halt = !m.stocks[id].halt; return m;
 });
+$("#gmLimit").onclick = async () => {
+  const next = mkt.limit === false;   // 当前关着就开，开着就关
+  await applyMarket(m => { m.limit = next; return m; });
+  toast(next ? "涨跌停已开启：按昨收 ±10% 封板。" : "涨跌停已关闭：日常波动不再封板。");
+};
 $("#gmUp").onclick = () => shockPct(1);
 $("#gmDown").onclick = () => shockPct(-1);
 $("#gmSetPrice").onclick = () => {
@@ -910,7 +930,7 @@ $("#gmSetPrice").onclick = () => {
     const st = m.stocks[s.id];
     st.price = Number(v.toFixed(s.dp));
     st.cur = { o: st.price, h: st.price, l: st.price, c: st.price, v: 0 };
-    st.bt = 0; st.bars = (st.bars || []).concat([{ ...st.cur }]).slice(-40);
+    st.bt = 0; st.bars = (st.bars || []).concat([[st.cur.o, st.cur.h, st.cur.l, st.cur.c]]).slice(-30);
     return m;
   });
   toast("报价已改。");
@@ -928,7 +948,7 @@ $("#gmEvAdd").onclick = () => {
     imp[b.dataset.gs] = pct;
   });
   if (!Object.keys(imp).length) return toast("至少选一只受影响的股票。");
-  fireEvent({ title, desc: $("#gmEvDesc").value.trim(), imp, ticks: Math.max(1, Number($("#gmEvTicks").value) || 1) });
+  fireEvent({ title, desc: $("#gmEvDesc").value.trim(), imp, ticks: Math.max(1, Number($("#gmEvTicks").value) || 1), free: true });
   if (Math.abs(pct) > 10) toast("幅度超过涨跌停 ±10%：一天最多走 10%，多出的部分会被截断。");
   $("#gmEvTitle").value = ""; $("#gmEvDesc").value = "";
   $("#gmStocksChips").querySelectorAll(".chip").forEach(b => b.classList.remove("on"));
@@ -1020,13 +1040,25 @@ function updateDriver() {
   if (!isGM || DEMO || !mkt) return;
   const sp = clampSpeed(mkt.speed);
   driverTimer = setTimeout(async () => {
-    const due = Date.now() - (mkt.steppedAt || 0) >= sp - 100;
-    if (mkt.running !== false && due) {
-      try { await applyMarket(m => { const n = stepMarket(m); n.lastBy = "面板"; return n; }); } catch (e) { /* 下一拍再试 */ }
-    }
-    updateDriver();
+    try {
+      const due = Date.now() - (mkt.steppedAt || 0) >= sp - 100;
+      if (mkt.running !== false && due) {
+        await applyMarket(m => { const n = stepMarket(m); n.lastBy = "面板"; return n; });
+      }
+    } catch (e) { /* 写失败：下一拍再试 */ }
+    finally { updateDriver(); }
   }, sp);
 }
+
+// 看门狗：与推进链无关的独立心跳。链条万一断掉（写超时、页面被挂起），
+// 这里会在 2 倍间隔后接手，不会出现「跳一下就永远不动」。
+setInterval(() => {
+  if (!isGM || DEMO || !hasStocks(mkt) || mkt.running === false) return;
+  const sp = clampSpeed(mkt.speed);
+  if (Date.now() - (mkt.steppedAt || 0) > sp * 2 + 1500) {
+    applyMarket(m => { const n = stepMarket(m); n.lastBy = "看门狗"; return n; }).catch(() => {});
+  }
+}, 2000);
 
 async function main() {
   $("#btnRetry").onclick = () => location.reload();

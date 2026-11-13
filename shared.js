@@ -1,4 +1,4 @@
-// 金手指证券交易所 · 共享数据层
+﻿// 金手指证券交易所 · 共享数据层
 // 深水城五方势力各有「上市产业」。价格按随机游走 + 事件冲击推进。
 // 注意：字符串里不要出现未转义的英文双引号，否则整个模块语法错误。
 
@@ -10,7 +10,7 @@ export const TICK_MS = 5000;      // 默认一跳 5 秒
 export const SPEED_MIN = 1000;    // 最快 1 秒一跳
 export const SPEED_MAX = 60000;   // 最慢 60 秒一跳
 export const BAR_TICKS = 6;       // 6 跳 = 1 根 K
-export const MAX_BARS = 40;       // 保留 K 线根数
+export const MAX_BARS = 30;       // 保留 K 线根数
 export const FEE_RATE = 0.00055;  // 佣金 0.055%
 export const FEE_MIN = 5;         // 最低佣金 5 金
 export const LOT = 100;           // 一手 100 股
@@ -93,7 +93,7 @@ export function newMarket() {
     prevClose[s.id] = q;
   }
   const m = {
-    v: 3, tick: 0, running: true, vol: 1, autoNews: true, speed: TICK_MS,
+    v: 4, tick: 0, running: true, vol: 1, autoNews: true, speed: TICK_MS, limit: true,
     news: "", newsLeft: 0, events: [], stocks, steppedAt: Date.now()
   };
   m.index = indexOf(m); m.indexPrev = m.index;
@@ -105,15 +105,17 @@ export function stepMarket(m) {
   const volMul = m.vol || 1;
 
   // 事件：总冲击按持续跳数摊平，逐跳施加
+  // free=true 的是城主投放的事件：不受涨跌停限制（黑天鹅）；随机快讯照常受限
   const events = [];
-  const drift = {};
+  const driftN = {}, driftF = {};
   for (const e of (m.events || [])) {
     const total = Math.max(1, Number(e.ticks) || 1);
     let left = Number(e.left);
     if (!Number.isFinite(left)) left = total;
     left -= 1;
+    const bucket = e.free ? driftF : driftN;
     for (const id in (e.imp || {})) {
-      drift[id] = (drift[id] || 0) + (Number(e.imp[id]) / 100) / total;
+      bucket[id] = (bucket[id] || 0) + (Number(e.imp[id]) / 100) / total;
     }
     if (left > 0) events.push({ ...e, ticks: total, left });
   }
@@ -124,7 +126,7 @@ export function stepMarket(m) {
     const n = NEWS_FLAVOR[Math.floor(Math.random() * NEWS_FLAVOR.length)];
     news = n.t; newsLeft = 6;
     events.push({ id: "news-" + tick, title: n.t, desc: "", imp: n.imp, ticks: 4, left: 4 });
-    for (const id in n.imp) drift[id] = (drift[id] || 0) + (n.imp[id] / 100) / 4;
+    for (const id in n.imp) driftN[id] = (driftN[id] || 0) + (n.imp[id] / 100) / 4;
   }
 
   const stocks = {};
@@ -140,9 +142,11 @@ export function stepMarket(m) {
       stocks[s.id] = { ...st, bt: (st.bt || 0) + 1 };
       continue;
     }
-    let ret = s.vol * volMul * gauss() + s.drift + (drift[s.id] || 0);
+    let ret = s.vol * volMul * gauss() + s.drift + (driftN[s.id] || 0);
     let price = st.price * Math.exp(ret);
-    price = clampToLimit(price, st.prevClose || st.price);
+    if (m.limit !== false) price = clampToLimit(price, st.prevClose || st.price);
+    const free = driftF[s.id] || 0;
+    if (free) price *= Math.exp(free);   // 城主事件：黑天鹅，不封板
     price = Math.max(0.01, Number(price.toFixed(s.dp)));
 
     // 每 TICKS_PER_DAY 跳滚动一次昨收，涨跌停重新计算
@@ -155,9 +159,10 @@ export function stepMarket(m) {
     cur.v = (Number(cur.v) || 0) + vol;
 
     let bt = (st.bt || 0) + 1;
-    let bars = st.bars || [];
+    // K 线压缩成 [o,h,l,c] 数组：房间 metadata 总共只有 16kB，对象键名太占地方
+    let bars = (st.bars || []).map(b => Array.isArray(b) ? b : [b.o, b.h, b.l, b.c]);
     if (bt >= BAR_TICKS) {
-      bars = bars.concat([cur]).slice(-MAX_BARS);
+      bars = bars.concat([[cur.o, cur.h, cur.l, cur.c]]).slice(-MAX_BARS);
       cur = { o: price, h: price, l: price, c: price, v: 0 };
       bt = 0;
     }
@@ -165,8 +170,9 @@ export function stepMarket(m) {
   }
 
   const out = {
-    v: 3, tick, running: m.running !== false, vol: volMul,
+    v: 4, tick, running: m.running !== false, vol: volMul,
     autoNews: m.autoNews !== false, speed: clampSpeed(m.speed),
+    limit: m.limit !== false,
     news, newsLeft, events, stocks, steppedAt: Date.now(),
     indexPrev: m.indexPrev ?? m.index ?? 1000
   };

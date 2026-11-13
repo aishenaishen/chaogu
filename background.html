@@ -2,7 +2,7 @@
 <meta charset="utf-8">
 <script type="module">
 import OBR from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3/+esm";
-import { MKT_KEY, clampSpeed, newMarket, stepMarket } from "./shared.js";
+import { MKT_KEY, STOCKS, clampSpeed, newMarket, stepMarket } from "./shared.js";
 
 // SDK 必须静态 import：OBR 在 iframe 的 load 事件里才发 OBR_READY，
 // 动态 import 会输掉这场竞速，onReady 永远不触发。
@@ -33,6 +33,7 @@ OBR.onReady(async () => {
         if (Date.now() - stamp >= wait + GRACE_MS) {
           const next = stepMarket(cur);
           next.lastBy = "后台";
+          if (JSON.stringify(next).length > 14000) for (const s of STOCKS) { const st = next.stocks[s.id]; if (st && st.bars) st.bars = st.bars.slice(-12); }
           await OBR.room.setMetadata({ [MKT_KEY]: next });
         }
       }
