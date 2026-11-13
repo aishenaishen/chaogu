@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -184,7 +184,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v2.0.3</span>
+    <span class="ver">v2.0.4</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -302,6 +302,15 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
       <button class="chip" data-vol="2.5">狂暴</button>
       <button class="btn" id="gmReopen">开盘（重置昨收）</button>
     </div>
+    <div class="srow"><label>速度</label>
+      <button class="chip" data-speed="1000">1 秒</button>
+      <button class="chip" data-speed="2000">2 秒</button>
+      <button class="chip" data-speed="5000">5 秒</button>
+      <button class="chip" data-speed="10000">10 秒</button>
+      <button class="chip" data-speed="30000">30 秒</button>
+      <input class="inp w" id="gmSpeed" type="number" min="1" max="60" step="1" value="5">
+      <button class="btn" id="gmSpeedGo">秒 / 跳</button>
+    </div>
     <div class="srow"><label>随机新闻</label>
       <button class="chip" id="gmAutoNews">开</button>
       <span class="shint">开：每跳 3% 概率蹦一条随机快讯并小幅冲击</span>
@@ -375,7 +384,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
 
 <script type="module">
 import {
-  MKT_KEY, ACC_KEY, TICK_MS, STOCKS, stockById, fmt, PRESETS,
+  MKT_KEY, ACC_KEY, TICK_MS, STOCKS, stockById, fmt, PRESETS, clampSpeed,
   newMarket, stepMarket, newAccount, equityOf, positionValue, unrealizedOf, feeOf, indexOf, LOT
 } from "./shared.js";
 
@@ -392,7 +401,7 @@ function toast(msg) {
 const money = v => (v < 0 ? "-" : "") + Math.abs(v).toLocaleString("en-US",
   { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = v => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
-const volTxt = v => Math.round(v).toLocaleString("en-US") + " 手";
+const volTxt = v => Math.round(v / 100).toLocaleString("en-US") + " 手";
 
 /* ---------- 运行环境 ---------- */
 const QS = new URLSearchParams(location.search);
@@ -462,7 +471,10 @@ async function applyMarket(fn) {
   }
   const md = await OBR.room.getMetadata();
   const cur = md[MKT_KEY] || newMarket();
-  await OBR.room.setMetadata({ [MKT_KEY]: fn(structuredClone(cur)) });
+  const next = fn(structuredClone(cur));
+  await OBR.room.setMetadata({ [MKT_KEY]: next });
+  // 不等 metadata 事件回传，先就地刷新一次，GM 点完立刻看到结果
+  mkt = next; render(); if (isGM) gmSync();
 }
 
 async function loadMarket() {
@@ -519,6 +531,8 @@ async function setBalance(playerId, cash) {
   all.players = all.players || {};
   all.players[playerId] = { ...newAccount(), ...(all.players[playerId] || {}), cash: Math.max(0, cash) };
   await OBR.room.setMetadata({ [ACC_KEY]: all });
+  // 改的是自己：不等 metadata 事件，立刻反映到面板
+  if (playerId === myId) { acc = { ...newAccount(), ...all.players[playerId] }; render(); }
 }
 
 /* ---------- 渲染 ---------- */
@@ -735,9 +749,13 @@ function gmClose() { $("#gmMask").classList.remove("on"); }
 function gmSync() {
   if (!hasStocks(mkt)) return;
   const run = mkt.running !== false;
+  const sp = clampSpeed(mkt.speed);
   $("#gmRun").classList.toggle("on", run);
   $("#gmPause").classList.toggle("on", !run);
-  $("#gmRunState").textContent = run ? "每 5 秒一跳" : "已冻结";
+  $("#gmRunState").textContent = run ? "每 " + (sp / 1000) + " 秒一跳" : "已冻结";
+  document.querySelectorAll("[data-speed]").forEach(b =>
+    b.classList.toggle("on", Number(b.dataset.speed) === sp));
+  if (document.activeElement !== $("#gmSpeed")) $("#gmSpeed").value = String(sp / 1000);
   document.querySelectorAll("[data-vol]").forEach(b =>
     b.classList.toggle("on", Math.abs(Number(b.dataset.vol) - (mkt.vol || 1)) < 0.01));
   $("#gmAutoNews").textContent = mkt.autoNews !== false ? "开" : "关";
@@ -755,13 +773,18 @@ function gmSync() {
 async function refreshPlayers() {
   if (!isGM) return;
   if (DEMO) {
-    players = [{ id: "demo", name: "本地预览（自己）" }];
+    players = [{ id: "demo", name: "本地预览（自己）", role: "GM" }];
   } else {
-    try {
-      const list = await OBR.party.getPlayers();
-      players = list.map(p => ({ id: p.id, name: p.name || "玩家", role: p.role }));
-    } catch (e) {
-      players = [{ id: myId, name: myName }];
+    let list = [];
+    try { list = await OBR.party.getPlayers(); } catch (e) { list = []; }
+    // OBR 的 party 列表里通常不含 GM 自己；单独打开、还没人进房时就是空的，
+    // 所以必须把「我」放在第一位，否则 GM 连自己的钱都发不了。
+    const seen = new Set([myId]);
+    players = [{ id: myId, name: myName + "（你）", role: "GM" }];
+    for (const p of list) {
+      if (!p || seen.has(p.id)) continue;
+      seen.add(p.id);
+      players.push({ id: p.id, name: p.name || "玩家", role: p.role });
     }
   }
   const md = DEMO ? null : await OBR.room.getMetadata();
@@ -842,6 +865,16 @@ $("#gmClose").onclick = gmClose;
 $("#gmMask").addEventListener("click", e => { if (e.target.id === "gmMask") gmClose(); });
 $("#gmRun").onclick = () => applyMarket(m => { m.running = true; return m; });
 $("#gmPause").onclick = () => applyMarket(m => { m.running = false; return m; });
+function setSpeed(ms) {
+  const v = clampSpeed(ms);
+  applyMarket(m => { m.speed = v; return m; });
+  toast("行情改为每 " + (v / 1000) + " 秒一跳。");
+  gmSync();
+}
+document.querySelectorAll("[data-speed]").forEach(b => {
+  b.onclick = () => setSpeed(Number(b.dataset.speed));
+});
+$("#gmSpeedGo").onclick = () => setSpeed((Number($("#gmSpeed").value) || 5) * 1000);
 document.querySelectorAll("[data-vol]").forEach(b => {
   b.onclick = () => applyMarket(m => { m.vol = Number(b.dataset.vol); return m; });
 });
@@ -908,10 +941,12 @@ async function bootDemo() {
   isGM = !isEmbedded;
   $("#btnGM").style.display = isGM ? "" : "none";
   await loadMarket(); await loadAcc(); render();
-  demoTimer = setInterval(() => {
-    if (mkt && mkt.running !== false) { mkt = stepMarket(mkt); }
+  const demoTick = () => {
+    if (mkt && mkt.running !== false) mkt = stepMarket(mkt);
     render();
-  }, TICK_MS);
+    demoTimer = setTimeout(demoTick, clampSpeed(mkt?.speed));
+  };
+  demoTimer = setTimeout(demoTick, clampSpeed(mkt?.speed));
 }
 
 async function connect() {
@@ -937,6 +972,8 @@ async function connect() {
       if (JSON.stringify(mine) !== JSON.stringify(acc)) { acc = mine; render(); }
     }
   });
+  // 有人进出房间时刷新 GM 面板里的玩家列表
+  OBR.party.onChange(() => { if (isGM) refreshPlayers(); });
   toast("已连上 Owlbear，行情由 GM 的后台推进。");
 }
 

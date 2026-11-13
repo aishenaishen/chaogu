@@ -6,7 +6,9 @@ export const NS = "com.gilded.exchange";
 export const MKT_KEY = NS + "/market";
 export const ACC_KEY = NS + "/account";
 
-export const TICK_MS = 5000;      // 一跳 5 秒
+export const TICK_MS = 5000;      // 默认一跳 5 秒
+export const SPEED_MIN = 1000;    // 最快 1 秒一跳
+export const SPEED_MAX = 60000;   // 最慢 60 秒一跳
 export const BAR_TICKS = 6;       // 6 跳 = 1 根 K
 export const MAX_BARS = 40;       // 保留 K 线根数
 export const FEE_RATE = 0.00055;  // 佣金 0.055%
@@ -26,6 +28,7 @@ export const STOCKS = [
 ];
 
 export const stockById = id => STOCKS.find(s => s.id === id);
+export const clampSpeed = v => Math.min(SPEED_MAX, Math.max(SPEED_MIN, Math.round(Number(v) || TICK_MS)));
 export const stockLabel = s => s.name;
 export const fmt = (v, dp) => Number(v).toFixed(dp);
 
@@ -90,7 +93,7 @@ export function newMarket() {
     prevClose[s.id] = q;
   }
   const m = {
-    v: 3, tick: 0, running: true, vol: 1, autoNews: true,
+    v: 3, tick: 0, running: true, vol: 1, autoNews: true, speed: TICK_MS,
     news: "", newsLeft: 0, events: [], stocks
   };
   m.index = indexOf(m); m.indexPrev = m.index;
@@ -155,7 +158,7 @@ export function stepMarket(m) {
 
   const out = {
     v: 3, tick, running: m.running !== false, vol: volMul,
-    autoNews: m.autoNews !== false,
+    autoNews: m.autoNews !== false, speed: clampSpeed(m.speed),
     news, newsLeft, events, stocks,
     indexPrev: m.indexPrev ?? m.index ?? 1000
   };
