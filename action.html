@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -33,6 +33,7 @@ input,select{font:inherit}
 .ghost:hover{background:#f2f5f2}
 .ghost.gm{color:#8a6a2b;background:#fbf3e2;font-weight:600}
 .ghost.gm:hover{background:#f7ead0}
+.ghost.off{opacity:.5}
 
 main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12px 16px 14px;overflow:auto}
 .card{background:var(--card);border:1px solid var(--line);border-radius:18px;
@@ -188,10 +189,11 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v2.5.0</span>
+    <span class="ver">v2.6.1</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
+    <button class="ghost" id="btnSound" data-sfx="none">🔊 音效</button>
     <button class="ghost" id="btnHelp">新手教程</button>
   </header>
 
@@ -241,6 +243,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
           <span>最低 <b id="cLow">—</b></span>
           <span>昨收 <b id="cPrev">—</b></span>
           <span>成交 <b id="cVol">—</b></span>
+          <span>拥挤 <b id="cCrowd">—</b></span>
         </div>
         <div id="chartbox"><canvas id="chart"></canvas></div>
         <div class="evbar" id="evbar"><span class="evtag">快讯</span><span id="evtext">牌价平稳，等城主发话。</span></div>
@@ -269,10 +272,10 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
           <div class="abtns shortrow">
             <button class="short" id="btnShort">融券开空</button>
           </div>
-          <div class="posline"><span>持仓</span><span><b id="pHold">0</b> 股 · 成本 <b id="pCost">—</b></span></div>
-          <div class="posline"><span>融券保证金</span><span><b id="pMargin">0.00</b> 金币</span></div>
+          <div class="posline"><span>持仓</span><span id="pLine"><b id="pHold">0</b> 股 · 成本 <b id="pCost">—</b></span></div>
+          <div class="posline"><span>待交收</span><span><b id="pPending">0.00</b> 金币</span></div>
           <button class="closebtn" id="btnClose" disabled>清仓</button>
-          <div class="fhint">T+0，随时可卖。融券开空要 50% 保证金，浮亏到开仓额的 65% 会被强制平仓。</div>
+          <div class="fhint">T+1：卖出后 6 跳才到账。买跌（融券）押 50% 押金，亏光押金自动平仓。</div>
         </section>
         <section class="card tipcard">
           <div class="tipt">老雅诺的规矩</div>
@@ -299,6 +302,11 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     </div>
 
     <div class="sep"></div>
+    <div class="srow"><label>重置</label>
+      <button class="btn" id="gmResetMkt">重置全部股票</button>
+      <button class="btn" id="gmResetPlayers">重置玩家资金</button>
+      <span class="shint">股票回到发行价、清 K 线事件；玩家钱清零、清空持仓</span>
+    </div>
     <div class="srow"><label>行情</label>
       <button class="chip" id="gmRun">继续跳动</button>
       <button class="chip" id="gmPause">暂停</button>
@@ -359,6 +367,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="srow"><label></label>
       <input class="inp w" id="gmEvPct" type="number" value="-5" step="1"><span class="shint">%</span>
       <input class="inp w" id="gmEvTicks" type="number" value="6" step="1" min="1"><span class="shint">跳</span>
+      <input class="inp w" id="gmEvCrowd" type="number" value="0" step="5" min="-100" max="100"><span class="shint">拥挤</span>
       <button class="btn" id="gmEvAdd">加入事件</button>
       <button class="btn" id="gmEvClear">清空事件</button>
       <button class="btn" id="gmEvStep">推一拍</button>
@@ -376,8 +385,8 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
   <div class="sheet" style="width:560px">
     <h3>怎么玩</h3>
     <div class="sub">深水城六方产业在交易所挂牌，红涨绿跌，涨跌停 ±10%。</div>
-    <div class="srow"><label>玩家</label><span class="shint">左侧选股票 → 右侧填股数（1 手 = 100 股）→ 买入 / 卖出。T+0，随时能平。佣金 0.055%，最低 5 金。</span></div>
-    <div class="srow"><label></label><span class="shint">看跌就「融券开空」：占用 50% 保证金，浮亏到开仓额的 65% 会被强制平仓。</span></div>
+    <div class="srow"><label>玩家</label><span class="shint">左侧选股票 → 右侧填股数（1 手 = 100 股）→ 买入 / 卖出。T+1：卖出后 6 跳钱才到账。佣金 0.055%，最低 5 金。</span></div>
+    <div class="srow"><label></label><span class="shint">看跌就「买跌」：押 50% 押金，跌了赚、涨了亏，押金亏光自动平仓。</span></div>
     <div class="srow"><label></label><span class="shint">账户里的钱由城主发放。亏了不是爆仓，是欠了城里某位债主的钱。</span></div>
     <div class="sep"></div>
     <div class="srow"><label>城主</label><span class="shint">点右上「GM 控制台」：发钱、暂停行情、拉砸个股、投放事件。事件会显示在玩家面板的黄色条里。</span></div>
@@ -401,10 +410,62 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
 import {
   MKT_KEY, ACC_KEY, TICK_MS, STOCKS, stockById, fmt, PRESETS, clampSpeed,
   newMarket, stepMarket, newAccount, equityOf, positionValue, unrealizedOf, feeOf, indexOf, LOT,
-  SHORT_MARGIN, marginUsed, needsCover, shortLoss
+  SHORT_MARGIN, marginUsed, needsCover, shortLoss,
+  SETTLE_TICKS, releasePending, pendingTotal, addCrowd, clampCrowd, CROWD_NEUTRAL
 } from "./shared.js";
 
 const $ = s => document.querySelector(s);
+
+/* ---------- 音效（Web Audio 合成，不依赖外部文件） ---------- */
+let sfxOn = true;
+try { sfxOn = localStorage.getItem("gx-sound") !== "0"; } catch (e) {}
+let AC = null;
+function ctx() {
+  if (!AC) { try { AC = new (window.AudioContext || window.webkitAudioContext)(); } catch (e) { AC = null; } }
+  if (AC && AC.state === "suspended") { try { AC.resume(); } catch (e) {} }
+  return AC;
+}
+// freq → slideTo，dur 秒，gain 峰值
+function tone(freq, dur, type, gain, delay, slideTo) {
+  if (!sfxOn) return;
+  const c = ctx(); if (!c) return;
+  const t = c.currentTime + (delay || 0);
+  const o = c.createOscillator(), g = c.createGain();
+  o.type = type || "sine";
+  o.frequency.setValueAtTime(freq, t);
+  if (slideTo) o.frequency.exponentialRampToValueAtTime(slideTo, t + dur);
+  g.gain.setValueAtTime(0.0001, t);
+  g.gain.exponentialRampToValueAtTime(gain || 0.06, t + 0.008);
+  g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+  o.connect(g); g.connect(c.destination);
+  o.start(t); o.stop(t + dur + 0.03);
+}
+const SFX = {
+  tick()   { tone(1500, 0.03, "sine", 0.02); },
+  buy()    { tone(620, 0.09, "triangle", 0.06); tone(930, 0.12, "triangle", 0.05, 0.07); },
+  sell()   { tone(560, 0.09, "triangle", 0.06); tone(330, 0.14, "triangle", 0.05, 0.07); },
+  short()  { tone(300, 0.10, "sawtooth", 0.045); tone(210, 0.16, "sawtooth", 0.04, 0.09); },
+  cover()  { tone(430, 0.09, "triangle", 0.055); tone(640, 0.12, "triangle", 0.05, 0.07); },
+  money()  { tone(880, 0.06, "sine", 0.05); tone(1240, 0.09, "sine", 0.04, 0.05); },
+  ok()     { tone(700, 0.07, "sine", 0.05); tone(1050, 0.10, "sine", 0.04, 0.06); },
+  err()    { tone(200, 0.13, "square", 0.035, 0, 150); },
+  alarm()  { tone(520, 0.14, "square", 0.045); tone(390, 0.16, "square", 0.045, 0.15); tone(260, 0.20, "square", 0.045, 0.31); },
+  reset()  { tone(500, 0.07, "sine", 0.05); tone(500, 0.07, "sine", 0.05, 0.12); },
+  event()  { tone(760, 0.08, "triangle", 0.05); tone(570, 0.10, "triangle", 0.05, 0.08); },
+  news()   { tone(1150, 0.05, "sine", 0.035); }
+};
+// 所有按钮的通用「嗒」声；带 data-sfx="none" 的除外
+document.addEventListener("click", e => {
+  const b = e.target.closest && e.target.closest("button");
+  if (b && b.dataset.sfx !== "none") SFX.tick();
+}, true);
+function sfxLabel() {
+  const b = $("#btnSound");
+  if (!b) return;
+  b.textContent = sfxOn ? "🔊 音效" : "🔇 静音";
+  b.classList.toggle("off", !sfxOn);
+}
+
 let toastTimer = null;
 function toast(msg) {
   const el = $("#toast");
@@ -418,6 +479,10 @@ const money = v => (v < 0 ? "-" : "") + Math.abs(v).toLocaleString("en-US",
   { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const pct = v => (v >= 0 ? "+" : "") + v.toFixed(2) + "%";
 const volTxt = v => Math.round(v / 100).toLocaleString("en-US") + " 手";
+const crowdLabel = v => {
+  const n = Math.round(Number(v) || CROWD_NEUTRAL);
+  return n + (n >= 75 ? " 烫" : n >= 60 ? " 热" : n <= 25 ? " 冷" : "");
+};
 
 /* ---------- 运行环境 ---------- */
 const QS = new URLSearchParams(location.search);
@@ -527,6 +592,10 @@ const hasStocks = m => !!(m && m.stocks && STOCKS.every(s =>
 function cleanAcc(a) {
   const out = { ...newAccount(), ...(a || {}) };
   out.cash = Number(out.cash) || 0;
+  out.pending = Array.isArray(out.pending)
+    ? out.pending.filter(p => p && Number.isFinite(Number(p.amt)))
+      .map(p => ({ amt: Number(p.amt), due: Number(p.due) || 0 }))
+    : [];
   out.positions = (out.positions && typeof out.positions === "object") ? out.positions : {};
   for (const id in out.positions) {
     const p = out.positions[id];
@@ -557,8 +626,18 @@ async function saveAcc() {
   await OBR.room.setMetadata({ [ACC_KEY]: all });
 }
 
-async function setBalance(playerId, cash) {
-  if (DEMO) {
+// 卖出款按跳数交收：到期后自动回到可用资金
+async function settleUp() {
+  if (!mkt || !acc || !acc.pending) return;
+  const got = releasePending(acc, mkt.tick || 0);
+  if (got > 0) {
+    await saveAcc();
+    render();
+    toast("卖出款到账 " + money(got));
+  }
+}
+
+async function setBalance(playerId, cash) {  if (DEMO) {
     if (playerId === "demo") { acc.cash = Math.max(0, cash); localStorage.setItem(LS_KEY, JSON.stringify(acc)); render(); }
     return;
   }
@@ -579,7 +658,7 @@ function render() {
 
   const mv = positionValue(acc, mkt), pnl = unrealizedOf(acc, mkt), eq = equityOf(acc, mkt);
   $("#equity").innerHTML = money(eq) + "<small>金币</small>";
-  $("#sCash").textContent = money(acc.cash);
+  $("#sCash").textContent = money(acc.cash - marginUsed(acc));
   $("#sHold").textContent = money(mv);
   $("#sPnl").textContent = (pnl >= 0 ? "+" : "") + money(pnl);
   $("#sPnl").className = "v " + (pnl > 0 ? "up" : pnl < 0 ? "dn" : "");
@@ -616,16 +695,18 @@ function render() {
 
   const pos = acc.positions[pid];
   const short = !!pos && pos.shares < 0;
-  $("#pHold").textContent = pos ? pos.shares : 0;
-  $("#pCost").textContent = pos ? fmt(pos.cost, s.dp) : "—";
-  $("#pMargin").textContent = short ? fmt((-pos.shares) * pos.cost * SHORT_MARGIN, 2) : "0.00";
+  $("#pLine").innerHTML = pos
+    ? `<b>${pos.shares}</b> 股 · 成本 <b>${fmt(pos.cost, s.dp)}</b>` + (short ? ` · 押金 <b>${money((-pos.shares) * pos.cost * SHORT_MARGIN)}</b>` : "")
+    : `<b>0</b> 股 · 成本 <b>—</b>`;
+  $("#pPending").textContent = money(pendingTotal(acc));
+  $("#cCrowd").textContent = crowdLabel(st.crowd);
   $("#btnClose").disabled = !pos;
   $("#btnClose").textContent = short ? "一键平空" : "清仓";
   $("#btnBuy").textContent = short ? "平空（买回）" : "买入";
   $("#btnBuy").disabled = !!st.halt;
   $("#btnSell").disabled = !!st.halt || !pos || short || pos.shares <= 0;
   $("#btnShort").disabled = !!st.halt || short || (!!pos && pos.shares > 0);
-  $("#btnShort").textContent = short ? "空单持有中" : "融券开空";
+  $("#btnShort").textContent = short ? "空单持有中" : "买跌";
 
   const lastEv = mkt.events && mkt.events.length ? mkt.events[mkt.events.length - 1] : null;
   const evbar = $("#evbar");
@@ -651,7 +732,7 @@ function calc() {
   const amount = st ? shares * st.price : 0;
   $("#cAmount").textContent = money(amount);
   $("#cFee").textContent = money(amount ? feeOf(amount) : 0);
-  $("#cCash").textContent = money(acc.cash);
+  $("#cCash").textContent = money(acc.cash - marginUsed(acc));
 }
 
 function normalizeShares(v) {
@@ -742,6 +823,18 @@ function drawChart() {
 }
 
 /* ---------- 交易 ---------- */
+// 玩家交易会推动拥挤度：净买入抬拥挤，卖出/开空压拥挤
+async function noteFlow(delta) {
+  if (!mkt || !mkt.stocks || !mkt.stocks[pid]) return;
+  try {
+    await applyMarket(m => {
+      const st = m.stocks[pid];
+      if (st) st.flow = (Number(st.flow) || 0) + delta;
+      return m;
+    });
+  } catch (e) { /* 拥挤度推不动不影响成交 */ }
+}
+
 async function trade(action) {
   const st = mkt.stocks[pid], s = stockById(pid);
   if (st.halt) return toast("停牌中，等城主复牌。");
@@ -749,33 +842,37 @@ async function trade(action) {
   if (!shares) return toast("至少 1 手（100 股）。");
   const amount = shares * st.price, fee = feeOf(amount);
   const pos = acc.positions[pid];
+  const free = acc.cash - marginUsed(acc);
 
   if (action === "buy") {
     if (pos && pos.shares < 0) return toast("手上还有空单，先平空再买入。");
-    if (amount + fee > acc.cash) return toast("可用资金不够（含佣金 " + money(fee) + "）。");
+    if (amount + fee > free) return toast("可用资金不够（含佣金 " + money(fee) + "，融券保证金占用 " + money(marginUsed(acc)) + "）。");
     acc.cash -= amount + fee;
     const p = pos || { shares: 0, cost: 0 };
     p.cost = (p.cost * p.shares + amount + fee) / (p.shares + shares);
     p.shares += shares;
     acc.positions[pid] = p;
     await saveAcc(); render();
-    return toast("买入 " + shares + " 股 · 佣金 " + money(fee));
+    await noteFlow(shares);
+    SFX.buy(); return toast("买入 " + shares + " 股 · 佣金 " + money(fee));
   }
 
   if (action === "sell") {
     if (!pos || pos.shares < shares) return toast("手上没有这么多股。");
-    acc.cash += amount - fee;
+    const net = amount - fee;
+    acc.pending = acc.pending || [];
+    acc.pending.push({ amt: net, due: (mkt.tick || 0) + SETTLE_TICKS });
     acc.realized += (st.price - pos.cost) * shares - fee;
     pos.shares -= shares;
     if (pos.shares === 0) delete acc.positions[pid];
     await saveAcc(); render();
-    return toast("卖出 " + shares + " 股 · 佣金 " + money(fee));
+    await noteFlow(-shares);
+    SFX.sell(); return toast("卖出 " + shares + " 股 · " + money(net) + " 金 " + SETTLE_TICKS + " 跳后到账");
   }
 
   if (action === "short") {
     if (pos && pos.shares > 0) return toast("多头仓位还在，先卖出再开空。");
     const margin = amount * SHORT_MARGIN;
-    const free = acc.cash - marginUsed(acc);
     if (margin > free) return toast("保证金不够：需要 " + money(margin) + "，可用 " + money(Math.max(0, free)) + "。");
     acc.cash += amount - fee;
     const p = pos || { shares: 0, cost: 0 };
@@ -783,7 +880,8 @@ async function trade(action) {
     p.shares -= shares;
     acc.positions[pid] = p;
     await saveAcc(); render();
-    return toast("融券开空 " + shares + " 股 · 占用保证金 " + money(margin) + " · 佣金 " + money(fee));
+    await noteFlow(-shares);
+    SFX.short(); return toast("买跌 " + shares + " 股 · 押金 " + money(margin) + " · 跌了赚，涨了亏");
   }
 
   // cover：买回空单
@@ -795,10 +893,11 @@ async function trade(action) {
   pos.shares += shares;
   if (pos.shares === 0) delete acc.positions[pid];
   await saveAcc(); render();
-  toast("平空 " + shares + " 股 · " + (pnl >= 0 ? "赚 " : "亏 ") + money(Math.abs(pnl)));
+  await noteFlow(shares);
+  SFX.cover(); toast("平空 " + shares + " 股 · " + (pnl >= 0 ? "赚 " : "亏 ") + money(Math.abs(pnl)));
 }
 
-// 浮亏到开仓名义的 65% 就地强平
+// 空头浮亏亏光押金（名义的 50%）时自动平仓
 async function checkMargin() {
   if (!mkt || !mkt.stocks) return;
   let changed = false, notes = [];
@@ -817,7 +916,7 @@ async function checkMargin() {
   }
   if (!changed) return;
   await saveAcc(); render();
-  toast("保证金不足，已强制平空：" + notes.join("；"));
+  SFX.alarm(); toast("保证金不足，已强制平空：" + notes.join("；"));
 }
 
 async function closeAll() {
@@ -828,11 +927,17 @@ async function closeAll() {
   const n = Math.abs(pos.shares);
   const amount = n * st.price, fee = feeOf(amount);
   const pnl = pos.shares > 0 ? (st.price - pos.cost) * n - fee : (pos.cost - st.price) * n - fee;
-  acc.cash += pos.shares > 0 ? amount - fee : -(amount + fee);
+  if (pos.shares > 0) {
+    acc.pending = acc.pending || [];
+    acc.pending.push({ amt: amount - fee, due: (mkt.tick || 0) + SETTLE_TICKS });
+  } else {
+    acc.cash -= amount + fee;
+  }
   acc.realized += pnl;
   delete acc.positions[pid];
   await saveAcc(); render();
-  toast((pos.shares > 0 ? "已清仓" : "已平空") + " · 佣金 " + money(fee));
+  await noteFlow(pos.shares > 0 ? -n : n);
+  if (pos && pos.shares > 0) SFX.sell(); else SFX.cover(); toast((pos.shares > 0 ? "已卖出，钱 " + SETTLE_TICKS + " 跳后到账" : "已平空") + " · 佣金 " + money(fee));
 }
 
 /* ---------- GM ---------- */
@@ -899,7 +1004,7 @@ async function refreshPlayers() {
     b.onclick = async () => {
       const inp = $("#plist").querySelector(`input[data-pid="${b.dataset.set}"]`);
       await setBalance(b.dataset.set, Number(inp.value) || 0);
-      toast("资金已改。");
+      SFX.ok(); toast("资金已改。");
     };
   });
 }
@@ -918,17 +1023,18 @@ function shockPct(sign) {
     st.bt = 0;
     return m;
   });
-  toast(s.name + (pctv > 0 ? " 拉涨 " : " 砸盘 ") + Math.abs(pctv) + "%");
+  SFX.event(); toast(s.name + (pctv > 0 ? " 拉涨 " : " 砸盘 ") + Math.abs(pctv) + "%");
 }
 
 function fireEvent(ev) {
   applyMarket(m => {
     m.events = (m.events || []).concat([{ ...ev, left: ev.ticks, id: "ev-" + Date.now().toString(36) }]);
+    if (ev.crowd) addCrowd(m, Object.keys(ev.imp || {}), ev.crowd);
     m.news = ev.title + (ev.desc ? "：" + ev.desc : "");
     m.newsLeft = Math.max(6, ev.ticks);
     return m;
   });
-  toast("事件已触发：" + ev.title);
+  SFX.event(); toast("事件已触发：" + ev.title + (ev.crowd ? "（拥挤 " + (ev.crowd > 0 ? "+" : "") + ev.crowd + "）" : ""));
 }
 
 /* ---------- 启动 ---------- */
@@ -947,6 +1053,13 @@ $("#btnSell").onclick = () => trade("sell");
 $("#btnShort").onclick = () => trade("short");
 $("#btnClose").onclick = closeAll;
 $("#btnHelp").onclick = () => $("#helpMask").classList.add("on");
+$("#btnSound").onclick = () => {
+  sfxOn = !sfxOn;
+  try { localStorage.setItem("gx-sound", sfxOn ? "1" : "0"); } catch (e) {}
+  sfxLabel();
+  if (sfxOn) SFX.ok();
+};
+sfxLabel();
 $("#helpClose").onclick = () => $("#helpMask").classList.remove("on");
 $("#helpMask").addEventListener("click", e => { if (e.target.id === "helpMask") $("#helpMask").classList.remove("on"); });
 document.querySelectorAll("[data-q]").forEach(b => {
@@ -954,7 +1067,10 @@ document.querySelectorAll("[data-q]").forEach(b => {
     const q = b.dataset.q;
     if (q === "max") {
       const st = mkt?.stocks?.[pid];
-      const max = st ? Math.floor(acc.cash / (st.price * 1.00055) / LOT) * LOT : 0;
+      const pos = acc.positions[pid];
+      let max = 0;
+      if (st && pos && pos.shares < 0) max = -pos.shares;      // 平空：最多就是手上空单
+      else if (st) max = Math.floor((acc.cash - marginUsed(acc)) / (st.price * 1.00055) / LOT) * LOT;
       $("#qty").value = Math.max(0, max);
     } else $("#qty").value = q;
     calc();
@@ -969,7 +1085,7 @@ $("#gmPause").onclick = () => applyMarket(m => { m.running = false; return m; })
 async function setSpeed(ms) {
   const v = clampSpeed(ms);
   await applyMarket(m => { m.speed = v; return m; });
-  toast("行情改为每 " + (v / 1000) + " 秒一跳。");
+  SFX.ok(); toast("行情改为每 " + (v / 1000) + " 秒一跳。");
   gmSync();
   updateDriver();
 }
@@ -985,13 +1101,52 @@ $("#gmReopen").onclick = () => applyMarket(m => {
   for (const s of STOCKS) { const st = m.stocks[s.id]; st.prevClose = st.price; }
   m.indexPrev = m.index; return m;
 });
-$("#gmHalt").onclick = () => applyMarket(m => {
-  const id = $("#gmStock").value; m.stocks[id].halt = !m.stocks[id].halt; return m;
+// 危险操作二次确认：再点一次才执行（OBR 的 iframe 里 confirm 可能被拦）
+let armed = null, armedTimer = null;
+function arm(btn, fn) {
+  if (armed === btn) {
+    clearTimeout(armedTimer); armed = null; btn.textContent = btn.dataset.label || btn.textContent; fn(); return;
+  }
+  if (armed) { armed.textContent = armed.dataset.label || armed.textContent; clearTimeout(armedTimer); }
+  armed = btn; btn.dataset.label = btn.textContent;
+  btn.textContent = "再点一次确认";
+  armedTimer = setTimeout(() => { if (armed === btn) { btn.textContent = btn.dataset.label; armed = null; } }, 3000);
+}
+
+$("#gmResetMkt").onclick = () => arm($("#gmResetMkt"), async () => {
+  const sp = mkt?.speed ?? TICK_MS, vol = mkt?.vol ?? 1;
+  const lim = mkt?.limit !== false, an = mkt?.autoNews !== false;
+  const tk = mkt?.tick || 0;   // 保留跳数，免得待交收的钱永远不到账
+  await applyMarket(() => {
+    const m = newMarket();
+    m.tick = tk;
+    m.speed = clampSpeed(sp); m.vol = vol; m.limit = lim; m.autoNews = an;
+    m.lastBy = "重置";
+    m.steppedAt = Date.now();
+    return m;
+  });
+  render(); gmSync();
+  SFX.reset(); toast("六只股票已重置回发行价。");
 });
+$("#gmResetPlayers").onclick = () => arm($("#gmResetPlayers"), async () => {
+  const md = await OBR.room.getMetadata();
+  const all = md[ACC_KEY] || { v: 1, players: {} };
+  const ids = Object.keys(all.players || {});
+  const fresh = { v: 1, players: {} };
+  for (const id of ids) fresh.players[id] = newAccount(0);
+  fresh.players[myId] = newAccount(0);
+  await OBR.room.setMetadata({ [ACC_KEY]: fresh });
+  acc = newAccount(0);
+  render(); refreshPlayers();
+  SFX.reset(); toast("玩家资金已清零（" + Object.keys(fresh.players).length + " 人）。");
+});
+$("#gmHalt").onclick = () => { SFX.ok(); applyMarket(m => {
+  const id = $("#gmStock").value; m.stocks[id].halt = !m.stocks[id].halt; return m;
+}); };
 $("#gmLimit").onclick = async () => {
   const next = mkt.limit === false;   // 当前关着就开，开着就关
   await applyMarket(m => { m.limit = next; return m; });
-  toast(next ? "涨跌停已开启：按昨收 ±10% 封板。" : "涨跌停已关闭：日常波动不再封板。");
+  SFX.ok(); toast(next ? "涨跌停已开启：按昨收 ±10% 封板。" : "涨跌停已关闭：日常波动不再封板。");
 };
 $("#gmUp").onclick = () => shockPct(1);
 $("#gmDown").onclick = () => shockPct(-1);
@@ -1005,11 +1160,11 @@ $("#gmSetPrice").onclick = () => {
     st.bt = 0; st.bars = (st.bars || []).concat([[st.cur.o, st.cur.h, st.cur.l, st.cur.c]]).slice(-30);
     return m;
   });
-  toast("报价已改。");
+  SFX.ok(); toast("报价已改。");
 };
 $("#gmFire").onclick = () => {
   const p = PRESETS[Number($("#gmPreset").value)];
-  if (p) fireEvent({ title: p.title, desc: p.desc, imp: p.imp, ticks: p.ticks, free: true });
+  if (p) fireEvent({ title: p.title, desc: p.desc, imp: p.imp, ticks: p.ticks, crowd: p.crowd, free: true });
 };
 $("#gmEvAdd").onclick = () => {
   const title = $("#gmEvTitle").value.trim();
@@ -1020,18 +1175,18 @@ $("#gmEvAdd").onclick = () => {
     imp[b.dataset.gs] = pct;
   });
   if (!Object.keys(imp).length) return toast("至少选一只受影响的股票。");
-  fireEvent({ title, desc: $("#gmEvDesc").value.trim(), imp, ticks: Math.max(1, Number($("#gmEvTicks").value) || 1), free: true });
+  fireEvent({ title, desc: $("#gmEvDesc").value.trim(), imp, ticks: Math.max(1, Number($("#gmEvTicks").value) || 1), crowd: clampCrowd(Number($("#gmEvCrowd").value) || 0), free: true });
   if (Math.abs(pct) >= 20) toast("幅度 " + pct + "%：城主事件不封板，价格会被直接打穿板外。");
   $("#gmEvTitle").value = ""; $("#gmEvDesc").value = "";
   $("#gmStocksChips").querySelectorAll(".chip").forEach(b => b.classList.remove("on"));
 };
 $("#gmEvClear").onclick = () => {
   applyMarket(m => { m.events = []; m.news = ""; m.newsLeft = 0; return m; });
-  toast("已清空进行中的事件。");
+  SFX.ok(); toast("已清空进行中的事件。");
 };
 $("#gmEvStep").onclick = () => {
   applyMarket(m => { const n = stepMarket(m); n.lastBy = "手动"; return n; });
-  toast("已手动推一拍。");
+  SFX.ok(); toast("已手动推一拍。");
 };
 $("#giveAllGo").onclick = async () => {
   const delta = Number($("#giveAll").value) || 0;
@@ -1039,7 +1194,7 @@ $("#giveAllGo").onclick = async () => {
     const cur = DEMO ? acc.cash : ((await OBR.room.getMetadata())[ACC_KEY]?.players?.[p.id]?.cash || 0);
     await setBalance(p.id, cur + delta);
   }
-  toast("已给 " + players.length + " 位玩家各 " + delta + " 金。");
+  SFX.money(); toast("已给 " + players.length + " 位玩家各 " + delta + " 金。");
   refreshPlayers();
 };
 
@@ -1062,6 +1217,7 @@ async function bootDemo() {
     if (mkt && mkt.running !== false) mkt = stepMarket(mkt);
     render();
     checkMargin();
+    settleUp();
     demoTimer = setTimeout(demoTick, clampSpeed(mkt?.speed));
   };
   demoTimer = setTimeout(demoTick, clampSpeed(mkt?.speed));
@@ -1084,7 +1240,7 @@ async function connect() {
   if (isGM) { gmSync(); refreshPlayers(); }
 
   OBR.room.onMetadataChange(md => {
-    if (hasStocks(md[MKT_KEY])) { mkt = md[MKT_KEY]; render(); if (isGM) gmSync(); updateDriver(); checkMargin(); }
+    if (hasStocks(md[MKT_KEY])) { mkt = md[MKT_KEY]; render(); if (isGM) gmSync(); updateDriver(); checkMargin(); settleUp(); }
     if (md[ACC_KEY] && md[ACC_KEY].players?.[myId]) {
       const mine = cleanAcc(md[ACC_KEY].players[myId]);
       if (JSON.stringify(mine) !== JSON.stringify(acc)) { acc = mine; render(); }

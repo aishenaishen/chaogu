@@ -16,6 +16,8 @@ export const FEE_MIN = 5;         // 最低佣金 5 金
 export const LOT = 100;           // 一手 100 股
 export const LIMIT = 0.10;        // 涨跌停 ±10%
 export const TICKS_PER_DAY = 480; // 一天 480 跳
+export const SETTLE_TICKS = 6;    // 卖出后 6 跳（一根 K）才交收
+export const CROWD_NEUTRAL = 50;  // 拥挤度中性值
 
 // ── 六个「上市产业」──────────────────────────────────────────────
 export const STOCKS = [
@@ -27,8 +29,7 @@ export const STOCKS = [
   { id: "WDPA", code: "600106", name: "深水城港务",   sector: "公用", p0: 31.40, dp: 2, vol: 0.0068, drift: 0.00001 }
 ];
 
-export const stockById = id => STOCKS.find(s => s.id === id);
-export const clampSpeed = v => Math.min(SPEED_MAX, Math.max(SPEED_MIN, Math.round(Number(v) || TICK_MS)));
+export const stockById = id => STOCKS.find(s => s.id === id);export const clampSpeed = v => Math.min(SPEED_MAX, Math.max(SPEED_MIN, Math.round(Number(v) || TICK_MS)));
 export const stockLabel = s => s.name;
 export const fmt = (v, dp) => Number(v).toFixed(dp);
 
@@ -63,6 +64,28 @@ export const PRESETS = [
   { id: "shipwrights_ball", title: "造船匠舞会", desc: "全城的船长和寡妇挤在同一个舞厅，订单签到了明年。", imp: { JLRS: 7, WDPA: 5, KSLT: 3 }, ticks: 12 },
   { id: "double_festival", title: "双塞节双游行", desc: "两场游行撞在同一天，酒馆、马车和赌坊一起爆满。", imp: { WDPA: 6, MNSN: 5, JLRS: 4, GLHD: 3 }, ticks: 12 }
 ];
+
+// 每个预设自带的拥挤度冲击：恐慌、丑闻压拥挤，利好、抢购推拥挤
+const PRESET_CROWD = {
+  fireball: -35, bankrun: -50, fishbowl: -30, shipwreck: -25, blockade: -20,
+  caravan: 20, strike: -30, taxcut: 25, gangwar: -25, goldflow: 40,
+  eyes_lost: -30, sansa_rampage: -50, manshoon_leak: -45, cassalanter_due: -55,
+  jarlaxle_sails: -35, dragon_wakes: -60, hoard_found: 35, masked_raid: -30,
+  harper_audit: -20, nimblewright: -15, trollskull_open: 10, gold_ship: 20,
+  shipwrights_ball: 10, double_festival: 15
+};
+for (const p of PRESETS) p.crowd = PRESET_CROWD[p.id] ?? 0;
+
+export const clampCrowd = v => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
+
+// 直接给某几只股票加拥挤度（事件、玩家交易都走这里）
+export function addCrowd(m, ids, delta) {
+  for (const id of ids) {
+    const st = m.stocks && m.stocks[id];
+    if (st) st.crowd = clampCrowd((Number(st.crowd) || CROWD_NEUTRAL) + delta);
+  }
+  return m;
+}
 
 export const NEWS_FLAVOR = [
   { imp: { WDPA: 1.2 }, t: "【港口】海之少女嘉年华宣布驻留一季，码头生意火爆。" },
@@ -409,7 +432,7 @@ export function newMarket() {
     const q = Number(s.p0.toFixed(s.dp));
     const v0 = 4000 + Math.floor(Math.random() * 6000);
     stocks[s.id] = {
-      price: q, prevClose: q, halt: false,
+      price: q, prevClose: q, halt: false, crowd: CROWD_NEUTRAL, flow: 0,
       cur: { o: q, h: q, l: q, c: q, v: v0 },
       bars: [], bt: 0
     };
@@ -456,16 +479,26 @@ export function stepMarket(m) {
   for (const s of STOCKS) {
     // 防御：房间里如果残留半截行情，按初始价补齐，别让整个推进抛错卡死
     const st = m.stocks[s.id] || {
-      price: s.p0, prevClose: s.p0, halt: false,
+      price: s.p0, prevClose: s.p0, halt: false, crowd: CROWD_NEUTRAL, flow: 0,
       cur: { o: s.p0, h: s.p0, l: s.p0, c: s.p0, v: 0 }, bars: [], bt: 0
     };
     if (!Number.isFinite(st.price) || st.price <= 0) st.price = s.p0;
     if (!Number.isFinite(st.prevClose) || st.prevClose <= 0) st.prevClose = st.price;
+
+    // 拥挤度：玩家净买入推高、每跳自然回落；拥挤带来溢价，也放大波动
+    const flow = Number(st.flow) || 0;
+    let crowd = Number.isFinite(Number(st.crowd)) ? Number(st.crowd) : CROWD_NEUTRAL;
+    crowd = Math.max(0, Math.min(100, crowd + (flow / LOT) * 0.8 - 0.35));
+
     if (st.halt) {
-      stocks[s.id] = { ...st, bt: (st.bt || 0) + 1 };
+      stocks[s.id] = { ...st, crowd, flow: 0, bt: (st.bt || 0) + 1 };
       continue;
     }
-    let ret = s.vol * volMul * gauss() + s.drift + (driftN[s.id] || 0);
+    const crowdPush = ((crowd - CROWD_NEUTRAL) / CROWD_NEUTRAL) * 0.0012;
+    const volBoost = 1 + Math.max(0, crowd - CROWD_NEUTRAL) / 120;
+    let ret = s.vol * volMul * volBoost * gauss() + s.drift + crowdPush + (driftN[s.id] || 0);
+    // 拥挤到 75 以上再遇到下跌：踩踏，跌幅放大
+    if (crowd > 75 && ret < 0) ret *= 1.35;
     const free = driftF[s.id] || 0;   // 城主事件：黑天鹅，不封板
     let price = st.price * Math.exp(ret + free);
     if (m.limit !== false && !free) {
@@ -494,7 +527,7 @@ export function stepMarket(m) {
       cur = { o: price, h: price, l: price, c: price, v: 0 };
       bt = 0;
     }
-    stocks[s.id] = { price, prevClose: newDay ? price : st.prevClose, halt: false, cur, bars, bt };
+    stocks[s.id] = { price, prevClose: newDay ? price : st.prevClose, halt: false, crowd, flow: 0, cur, bars, bt };
   }
 
   const out = {
@@ -510,10 +543,29 @@ export function stepMarket(m) {
 
 // ── 账户：做多股票，T+0，佣金万 0.55、最低 5 金 ────────────────
 export function newAccount(cash = 0) {
-  return { cash, deposited: cash, realized: 0, positions: {} };
+  return { cash, deposited: cash, realized: 0, positions: {}, pending: [] };
 }
 
-export function positionValue(acc, m) {  let v = 0;
+// 卖出后 T+SETTLE_TICKS 跳才交收：把到期的钱放回现金，返回本次解冻金额
+export function releasePending(acc, tick) {
+  const keep = [];
+  let sum = 0;
+  for (const p of (acc.pending || [])) {
+    if (!p || !Number.isFinite(Number(p.amt))) continue;
+    if (tick >= (Number(p.due) || 0)) sum += Number(p.amt);
+    else keep.push({ amt: Number(p.amt), due: Number(p.due) || 0 });
+  }
+  acc.pending = keep;
+  acc.cash = (Number(acc.cash) || 0) + sum;
+  return sum;
+}
+
+export function pendingTotal(acc) {
+  return (acc.pending || []).reduce((n, p) => n + (Number(p.amt) || 0), 0);
+}
+
+export function positionValue(acc, m) {
+  let v = 0;
   for (const id in acc.positions) {
     const pos = acc.positions[id], st = m?.stocks?.[id];
     if (pos && st) v += pos.shares * st.price;
@@ -540,7 +592,7 @@ export function feeOf(notional) {
 
 // ── 融券做空 ────────────────────────────────────────────────
 export const SHORT_MARGIN = 0.5;   // 开空保证金 = 名义的 50%
-export const COVER_LINE = 0.65;    // 浮亏达到开仓名义的 65% 强制平仓
+export const COVER_LINE = 0.5;     // 浮亏亏光这笔保证金（名义的 50%）自动平仓
 
 export function isShort(pos) {
   return !!pos && pos.shares < 0;
