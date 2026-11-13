@@ -85,6 +85,9 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
 .cprice{font-size:27px;font-weight:700;letter-spacing:-.6px;font-variant-numeric:tabular-nums;line-height:1.1}
 .cchg{font-size:12px;font-variant-numeric:tabular-nums}
 .cstats.cfloat{margin-top:-4px;font-size:10.5px;color:#8a978f}
+.ctf{display:flex;align-items:center;gap:6px;margin:6px 0 8px}
+.ctf .ctfl{font-size:11px;color:#8a7a63;letter-spacing:.08em}
+.ctf .chip{padding:3px 9px;font-size:11px}
 .cstats{display:flex;gap:18px;flex-wrap:wrap;margin:9px 0 8px;padding:7px 10px;border-radius:10px;
   background:#f7f8f4;font-size:11px;color:#7b8d86;flex:none}
 .cstats b{color:#33463e;font-weight:600;font-variant-numeric:tabular-nums}
@@ -204,7 +207,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v3.1.1</span>
+    <span class="ver">v3.3.0</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -266,6 +269,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
           <span>市面可卖 <b id="cFree">—</b></span>
           <span>按现价买光 <b id="cCost">—</b></span>
         </div>
+        <div class="ctf"><span class="ctfl">周期</span><span id="tfChips"></span><span class="shint" id="tfHint"></span></div>
         <div id="chartbox"><canvas id="chart"></canvas></div>
         <div class="evbar" id="evbar">
           <div class="evrow gm" id="evGm" hidden>
@@ -410,6 +414,14 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
       <input class="inp w" id="gmEvMin" type="number" value="15" step="1" min="1" max="180"><span class="shint">分钟</span>
       <input class="inp w" id="gmEvTrust" type="number" value="-10" step="5" min="-50" max="50"><span class="shint">信心</span>
       <input class="inp w" id="gmEvCrowd" type="number" value="0" step="5" min="-100" max="100"><span class="shint">拥挤</span>
+    </div>
+    <div class="srow"><label>性质</label>
+      <select class="sel" id="gmEvTier" style="width:auto">
+        <option value="auto">自动判性质</option>
+        <option value="light">轻 · 几天可缓</option>
+        <option value="heavy">重 · 要养几天</option>
+        <option value="evil">恶 · 整场难翻身</option>
+      </select>
       <button class="btn" id="gmEvAdd">加入事件</button>
       <button class="btn" id="gmEvClear">清空事件</button>
       <button class="btn" id="gmEvStep">推一拍</button>
@@ -453,7 +465,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
 <script type="module">
 import {
   MKT_KEY, ACC_KEY, TICK_MS, STOCKS, stockById, fmt, PRESETS, clampSpeed,
-  newMarket, stepMarket, newAccount, equityOf, positionValue, unrealizedOf, feeOf, indexOf, LOT,
+  newMarket, stepMarket, newAccount, equityOf, positionValue, unrealizedOf, feeOf, indexOf, LOT, TRUST_TIERS, trustTier, BAR_SEC_CHOICES, DEFAULT_BAR_SEC,
   SHORT_MARGIN, marginUsed, needsCover, shortLoss,
   SETTLE_TICKS, releasePending, pendingTotal, addCrowd, clampCrowd, CROWD_NEUTRAL
 } from "./shared.js";
@@ -608,7 +620,7 @@ const buildStocks = () => {
 
 /* ---------- 行情读写 ---------- */
 function seedBars(m) {
-  for (let i = 0; i < 30 * 6; i++) m = stepMarket(m);
+  for (let i = 0; i < 30 * (DEFAULT_BAR_SEC / 2); i++) m = stepMarket(m);
   for (const s of STOCKS) { const st = m.stocks[s.id]; st.prevClose = st.price; }
   m.indexPrev = m.index;
   return m;
@@ -871,6 +883,9 @@ function drawChart() {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, W, H);
 
+  const bs = Number(mkt?.barSec) || DEFAULT_BAR_SEC;
+  document.querySelectorAll("#tfChips [data-tf]").forEach(b => b.classList.toggle("on", Number(b.dataset.tf) === bs));
+  const hint = $("#tfHint"); if (hint) hint.textContent = "约 " + (bs / 2) + " 跳/根";
   const st = mkt?.stocks?.[pid];
   if (!st) return;
   const s = stockById(pid), dp = s.dp;
@@ -1192,6 +1207,10 @@ function fireEvent(ev) {
       if (!st) continue;
       const d = Number(ev.trust[id]) || 0;
       st.trust = Math.max(0, Math.min(100, (Number(st.trust) || 50) + d));
+      const tk = ev.tier && ev.tier !== "auto" ? ev.tier : trustTier(d, ev.title);
+      const T = TRUST_TIERS[tk] || TRUST_TIERS.heavy;
+      st.trustK = T.k;
+      if (tk === "evil") st.trustCeil = Math.min(Number(st.trustCeil) || 32, 32, st.trust);
       trust[id] = d;
     }
     m.events = (m.events || []).concat([{ ...ev, ticks, mins, tickMs: sp, trust, start, left: ticks, id: "ev-" + Date.now().toString(36) }]);
@@ -1205,6 +1224,30 @@ function fireEvent(ev) {
 
 /* ---------- 启动 ---------- */
 buildStocks();
+
+const tfLabel = sec => sec >= 60 ? (sec / 60) + " 分" : sec + " 秒";
+const tfTicks = sec => (sec / 2).toFixed(sec % 2 ? 1 : 0).replace(/\.0$/, "");
+$("#tfChips").innerHTML = BAR_SEC_CHOICES.map(sec =>
+  `<button class="chip" data-tf="${sec}">${tfLabel(sec)}</button>`).join("");
+$("#tfChips").onclick = async ev => {
+  const b = ev.target.closest("[data-tf]");
+  if (!b) return;
+  const sec = Number(b.dataset.tf);
+  await applyMarket(m => {
+    m.barSec = sec;
+    for (const id of Object.keys(m.stocks || {})) {
+      const st = m.stocks[id];
+      st.bars = [];
+      st.bt = 0;
+      st.cur = { o: st.price, h: st.price, l: st.price, c: st.price, v: 0 };
+    }
+    return m;
+  });
+  SFX.ok();
+  toast("K 线周期：" + tfLabel(sec) + " / 根（约 " + tfTicks(sec) + " 跳）。");
+  render();
+};
+
 $("#gmStock").innerHTML = STOCKS.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
   const OWNER_ORDER = ["KSLT","SNSA","MNSN","JLRS","GLHD","WDPA"];
   const ownerName = id => ((STOCKS.find(s => s.id === id) || {}).name || id).replace(/^深水城/, "");
@@ -1390,7 +1433,7 @@ $("#gmEvAdd").onclick = () => {
   if (!Object.keys(imp).length) return toast("至少选一只受影响的股票。");
   const trust = {};
   for (const id of Object.keys(imp)) trust[id] = Number($("#gmEvTrust").value) || 0;
-  fireEvent({ title, desc: $("#gmEvDesc").value.trim(), imp, durMin: Math.max(1, Number($("#gmEvMin").value) || 10), trust, crowd: clampCrowd(Number($("#gmEvCrowd").value) || 0), free: true });
+  fireEvent({ title, desc: $("#gmEvDesc").value.trim(), imp, durMin: Math.max(1, Number($("#gmEvMin").value) || 10), trust, crowd: clampCrowd(Number($("#gmEvCrowd").value) || 0), tier: $("#gmEvTier") ? $("#gmEvTier").value : "auto", free: true });
   if (Math.abs(pct) >= 20) toast("幅度 " + pct + "%：城主事件不封板，价格会被直接打穿板外。");
   $("#gmEvTitle").value = ""; $("#gmEvDesc").value = "";
   $("#gmStocksChips").querySelectorAll(".chip").forEach(b => b.classList.remove("on"));

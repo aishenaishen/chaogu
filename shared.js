@@ -9,7 +9,11 @@ export const ACC_KEY = NS + "/account";
 export const TICK_MS = 5000;      // 默认一跳 5 秒
 export const SPEED_MIN = 1000;    // 最快 1 秒一跳
 export const SPEED_MAX = 60000;   // 最慢 60 秒一跳
-export const BAR_TICKS = 6;       // 6 跳 = 1 根 K
+export const BAR_TICKS = 6;
+// K 线周期：以 2 秒/跳 为基准，30 秒 = 15 跳/根，5 秒 = 2.5 跳/根
+export const SEC_PER_TICK = 2;
+export const DEFAULT_BAR_SEC = 30;
+export const BAR_SEC_CHOICES = [5, 30, 60, 300, 900];       // 6 跳 = 1 根 K
 export const MAX_BARS = 30;       // 保留 K 线根数
 export const FEE_RATE = 0.01;     // 佣金 1%（费伦的钱庄抽得狠）
 export const FEE_MIN = 0.1;       // 最低佣金 1 银
@@ -198,6 +202,19 @@ const BALANCE_EVENTS = [
 ];
 PRESETS.push(...BALANCE_EVENTS);
 
+// 信心恢复档位：k 是每跳向目标回归的比例，ceil 是“污点上限”（恶性事件后回不到 50）
+export const TRUST_TIERS = {
+  light: { k: 0.0018, ceil: 50 },
+  heavy: { k: 0.0005, ceil: 50 },
+  evil:  { k: 0.00007, ceil: 32 }
+};
+export function trustTier(shock, title) {
+  const d = Number(shock) || 0;
+  const bad = d < 0;
+  if (bad && (Math.abs(d) >= 25 || /操控|邪教|血洗|黑账|内斗|灭口|栽赃|洗钱|勾结/.test(String(title || "")))) return "evil";
+  if (!bad) return "light";
+  return Math.abs(d) >= 12 ? "heavy" : "light";
+}
 export const clampTrust = v => Math.max(0, Math.min(100, Number(v) || 0));
 
 export const clampCrowd = v => Math.max(0, Math.min(100, Math.round(Number(v) || 0)));
@@ -563,7 +580,7 @@ export function newMarket() {
     prevClose[s.id] = q;
   }
   const m = {
-    v: 5, econ: 27, tick: 0, running: true, vol: 1, autoNews: true, speed: TICK_MS, limit: true,
+    v: 5, econ: 27, barSec: DEFAULT_BAR_SEC, tick: 0, running: true, vol: 1, autoNews: true, speed: TICK_MS, limit: true,
     news: "", newsLeft: 0, events: [], stocks, steppedAt: Date.now()
   };
   m.index = indexOf(m); m.indexPrev = m.index;
@@ -620,7 +637,8 @@ export function stepMarket(m) {
     // 拥挤度：玩家净买入推高；没有外力时缓慢回落到 50；事件期间被拉向事件目标
     const flow = Number(st.flow) || 0;
     let crowd = Number.isFinite(Number(st.crowd)) ? Number(st.crowd) : CROWD_NEUTRAL;
-    crowd += (CROWD_NEUTRAL - crowd) * 0.004 + (flow / LOT) * 0.8;
+    const fl0 = Number(st.float) > 0 ? Number(st.float) : s.float;
+    crowd += (CROWD_NEUTRAL - crowd) * 0.004 + (flow / fl0) * 240;
     if (crowdTarget[s.id] != null) crowd += (crowdTarget[s.id] - crowd) * 0.05;
     crowd = Math.max(0, Math.min(100, crowd));
 
@@ -633,11 +651,15 @@ export function stepMarket(m) {
     // 信心（trust）：丑闻会长期压低估值和波动的恢复力；0～100，50 为中性
     let trust = Number(st.trust);
     if (!Number.isFinite(trust)) trust = 50;
+    // 恢复速度按事件性质走：轻伤一天缓过来，恶性(操控股市/勾连邪教)整场难翻身
+    const trustK = Number.isFinite(Number(st.trustK)) ? Number(st.trustK) : TRUST_TIERS.heavy.k;
+    const trustCeil = Number.isFinite(Number(st.trustCeil)) ? Number(st.trustCeil) : 50;
+    const trustTarget = Math.min(50, trustCeil);
     const trustPush = ((trust - 50) / 50) * 0.0005;   // 信誉差 → 长期阴跌；信誉好 → 长期溢价
     const trustVol = 1 + Math.max(0, 50 - trust) / 120; // 不被信任的股票更容易暴涨暴跌
     let ret = s.vol * volMul * volBoost * trustVol * gauss() + s.drift + crowdPush + trustPush + (driftN[s.id] || 0);
     // 信誉会缓慢回归中性：每天（480 跳）约回 4 点，所以一次丑闻要养好几天
-    trust = Math.max(0, Math.min(100, trust + (trust < 50 ? 0.008 : trust > 50 ? -0.008 : 0)));
+    trust = Math.max(0, Math.min(100, trust + (trustTarget - trust) * trustK));
     // 拥挤到 75 以上再遇到下跌：踩踏，跌幅放大
     if (crowd > 75 && ret < 0) ret *= 1.35;
     const free = driftF[s.id] || 0;   // 城主事件：黑天鹅，不封板
@@ -660,16 +682,17 @@ export function stepMarket(m) {
     cur.l = Math.min(Number(cur.l) || price, price);
     cur.v = (Number(cur.v) || 0) + vol;
 
-    let bt = (st.bt || 0) + 1;
+    const barSec = Number(m.barSec) > 0 ? Number(m.barSec) : DEFAULT_BAR_SEC;
+    let bt = (Number(st.bt) || 0) + SEC_PER_TICK;   // 按“市场秒”累计：2 秒 = 1 跳
     // K 线压缩成 [o,h,l,c] 数组：房间 metadata 总共只有 16kB，对象键名太占地方
     let bars = (st.bars || []).map(b => Array.isArray(b) ? b : [b.o, b.h, b.l, b.c]);
-    if (bt >= BAR_TICKS) {
+    if (bt >= barSec) {
       bars = bars.concat([[cur.o, cur.h, cur.l, cur.c]]).slice(-MAX_BARS);
       cur = { o: price, h: price, l: price, c: price, v: 0 };
-      bt = 0;
+      bt -= barSec;
     }
     const fl = Number(st.float) > 0 ? Number(st.float) : s.float;
-    stocks[s.id] = { price, prevClose: newDay ? price : st.prevClose, halt: false, crowd, flow: 0, float: fl, trust, cur, bars, bt };
+    stocks[s.id] = { price, prevClose: newDay ? price : st.prevClose, halt: false, crowd, flow: 0, float: fl, trust, trustK, trustCeil, cur, bars, bt };
   }
 
   // 事件回溯：城主事件走完时，记下持续跳数和各股票的实际涨跌
@@ -685,7 +708,7 @@ export function stepMarket(m) {
   if (history.length > 20) history = history.slice(-20);
 
   const out = {
-    v: 5, econ: 27, tick, running: m.running !== false, vol: volMul,
+    v: 5, econ: 27, barSec: Number(m.barSec) > 0 ? Number(m.barSec) : DEFAULT_BAR_SEC, tick, running: m.running !== false, vol: volMul,
     autoNews: m.autoNews !== false, speed: clampSpeed(m.speed),
     limit: m.limit !== false,
     news, newsLeft, events, history, stocks, steppedAt: Date.now(),
