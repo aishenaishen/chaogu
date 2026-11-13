@@ -204,7 +204,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v3.1.0</span>
+    <span class="ver">v3.1.1</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -664,10 +664,17 @@ async function loadMarket() {
   }
 }
 
-const hasStocks = m => !!(m && m.stocks && Number(m.econ) === 27 && STOCKS.every(s => {
-  const q = m.stocks[s.id];
-  return q && typeof q.price === "number" && Number(q.float) > 0;
-}));
+const hasStocks = m => {
+  if (!m || !m.stocks) return false;
+  const ok = STOCKS.every(s => {
+    const q = m.stocks[s.id];
+    return q && typeof q.price === "number" && Number(q.float) > 0;
+  });
+  if (!ok) return false;
+  if (Number(m.econ) === 27) return true;
+  // 3.1.0 之前的盘面没有 econ 标记：只要价格在新经济量级（每股 0.1～20）就认，避免重置玩家盘面
+  return m.econ == null && STOCKS.every(s => m.stocks[s.id].price <= 20);
+};
 
 function cleanAcc(a) {
   const out = { ...newAccount(), ...(a || {}) };
@@ -1082,9 +1089,10 @@ function gmSync() {
   $("#gmHaltState").textContent = st && st.halt ? "停牌中" : "正常交易";
   $("#gmPrice").placeholder = st ? fmt(st.price, s.dp) : "指定价";
   if (st) {
-    if (document.activeElement !== $("#gmFloat")) $("#gmFloat").value = (Number(st.float || 0) / 10000).toFixed(1);
-    if (document.activeElement !== $("#gmTrust")) $("#gmTrust").value = Math.round(Number(st.trust ?? 50));
-    if (document.activeElement !== $("#gmCrowd")) $("#gmCrowd").value = Math.round(Number(st.crowd ?? 50));
+    const keepEdit = id => { const el = $(id); return document.activeElement === el || el.dataset.dirty === "1"; };
+    if (!keepEdit("#gmFloat")) $("#gmFloat").value = (Number(st.float || 0) / 10000).toFixed(1);
+    if (!keepEdit("#gmTrust")) $("#gmTrust").value = Math.round(Number(st.trust ?? 50));
+    if (!keepEdit("#gmCrowd")) $("#gmCrowd").value = Math.round(Number(st.crowd ?? 50));
   }
 
   $("#evlist").innerHTML = (mkt.events || []).length
@@ -1347,9 +1355,14 @@ $("#gmSetStats").onclick = async () => {
     if (Number.isFinite(cr)) st.crowd = Math.max(0, Math.min(100, cr));
     return m;
   });
+  for (const id of ["#gmFloat", "#gmTrust", "#gmCrowd"]) $(id).dataset.dirty = "";
   SFX.ok(); toast(s.name + "：股数/信心/拥挤已写入。");
   gmSync();
 };
+for (const id of ["#gmFloat", "#gmTrust", "#gmCrowd"]) {
+  const el = $(id);
+  if (el) el.addEventListener("input", () => { el.dataset.dirty = "1"; });
+}
 $("#gmSetPrice").onclick = () => {
   const s = stockById($("#gmStock").value), v = Number($("#gmPrice").value);
   if (!(v > 0)) return toast("先填一个正的价格。");

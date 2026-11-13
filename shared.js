@@ -668,7 +668,8 @@ export function stepMarket(m) {
       cur = { o: price, h: price, l: price, c: price, v: 0 };
       bt = 0;
     }
-    stocks[s.id] = { price, prevClose: newDay ? price : st.prevClose, halt: false, crowd, flow: 0, float: s.float, trust, cur, bars, bt };
+    const fl = Number(st.float) > 0 ? Number(st.float) : s.float;
+    stocks[s.id] = { price, prevClose: newDay ? price : st.prevClose, halt: false, crowd, flow: 0, float: fl, trust, cur, bars, bt };
   }
 
   // 事件回溯：城主事件走完时，记下持续跳数和各股票的实际涨跌
@@ -684,7 +685,7 @@ export function stepMarket(m) {
   if (history.length > 20) history = history.slice(-20);
 
   const out = {
-    v: 4, tick, running: m.running !== false, vol: volMul,
+    v: 5, econ: 27, tick, running: m.running !== false, vol: volMul,
     autoNews: m.autoNews !== false, speed: clampSpeed(m.speed),
     limit: m.limit !== false,
     news, newsLeft, events, history, stocks, steppedAt: Date.now(),
