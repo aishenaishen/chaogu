@@ -184,7 +184,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v2.0.2</span>
+    <span class="ver">v2.0.3</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -468,8 +468,25 @@ async function applyMarket(fn) {
 async function loadMarket() {
   if (DEMO) { mkt = seedBars(newMarket()); return; }
   const md = await OBR.room.getMetadata();
-  mkt = md[MKT_KEY] || null;
+  const raw = md[MKT_KEY];
+  // 房间里可能残留旧版（外汇版）的 market 对象：结构不对就重建，别让面板崩掉
+  mkt = hasStocks(raw) ? raw : null;
   if (!mkt) { mkt = newMarket(); await OBR.room.setMetadata({ [MKT_KEY]: mkt }); }
+}
+
+const hasStocks = m => !!(m && m.stocks && STOCKS.every(s =>
+  m.stocks[s.id] && typeof m.stocks[s.id].price === "number"));
+
+function cleanAcc(a) {
+  const out = { ...newAccount(), ...(a || {}) };
+  out.cash = Number(out.cash) || 0;
+  out.positions = (out.positions && typeof out.positions === "object") ? out.positions : {};
+  for (const id in out.positions) {
+    const p = out.positions[id];
+    if (!p || typeof p.shares !== "number" || typeof p.cost !== "number" || !(p.shares > 0)) delete out.positions[id];
+    else out.positions[id] = { shares: p.shares, cost: p.cost };
+  }
+  return out;
 }
 
 /* ---------- 账户读写（房间元数据，GM 可改） ---------- */
@@ -480,8 +497,7 @@ async function loadAcc() {
   }
   const md = await OBR.room.getMetadata();
   const all = md[ACC_KEY] || { v: 1, players: {} };
-  acc = { ...newAccount(), ...(all.players?.[myId] || {}) };
-  acc.positions = acc.positions || {};
+  acc = cleanAcc(all.players?.[myId]);
 }
 
 async function saveAcc() {
@@ -507,7 +523,7 @@ async function setBalance(playerId, cash) {
 
 /* ---------- 渲染 ---------- */
 function render() {
-  if (!mkt) return;
+  if (!hasStocks(mkt)) return;
   const st = mkt.stocks[pid];
   if (!st) return;
 
@@ -717,7 +733,7 @@ function gmOpen() {
 function gmClose() { $("#gmMask").classList.remove("on"); }
 
 function gmSync() {
-  if (!mkt) return;
+  if (!hasStocks(mkt)) return;
   const run = mkt.running !== false;
   $("#gmRun").classList.toggle("on", run);
   $("#gmPause").classList.toggle("on", !run);
@@ -915,10 +931,10 @@ async function connect() {
   if (isGM) { gmSync(); refreshPlayers(); }
 
   OBR.room.onMetadataChange(md => {
-    if (md[MKT_KEY]) { mkt = md[MKT_KEY]; render(); if (isGM) gmSync(); }
+    if (hasStocks(md[MKT_KEY])) { mkt = md[MKT_KEY]; render(); if (isGM) gmSync(); }
     if (md[ACC_KEY] && md[ACC_KEY].players?.[myId]) {
-      const mine = md[ACC_KEY].players[myId];
-      if (JSON.stringify(mine) !== JSON.stringify(acc)) { acc = { ...newAccount(), ...mine }; render(); }
+      const mine = cleanAcc(md[ACC_KEY].players[myId]);
+      if (JSON.stringify(mine) !== JSON.stringify(acc)) { acc = mine; render(); }
     }
   });
   toast("已连上 Owlbear，行情由 GM 的后台推进。");
