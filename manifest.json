@@ -1,0 +1,16 @@
+{
+  "name": "金手指兑铺",
+  "version": "1.0.0",
+  "manifest_version": 1,
+  "author": "aishenaishen",
+  "icon": "https://aishenaishen.github.io/chaogu/icon.svg",
+  "description": "深水城货币牌价与杠杆交易柜台。",
+  "action": {
+    "title": "金手指兑铺",
+    "icon": "https://aishenaishen.github.io/chaogu/icon.svg",
+    "popover": "https://aishenaishen.github.io/chaogu/action.html",
+    "width": 1040,
+    "height": 700
+  },
+  "background_url": "https://aishenaishen.github.io/chaogu/background.html"
+}

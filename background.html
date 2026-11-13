@@ -1,0 +1,20 @@
+<!doctype html>
+<meta charset="utf-8">
+<script type="module">
+import OBR from "https://cdn.jsdelivr.net/npm/@owlbear-rodeo/sdk@3/+esm";
+import { MKT_KEY, TICK_MS, newMarket, stepMarket } from "./shared.js";
+
+OBR.onReady(async () => {
+  const role = await OBR.player.getRole();
+  if (role !== "GM") return;
+
+  const md = await OBR.room.getMetadata();
+  if (!md[MKT_KEY]) await OBR.room.setMetadata({ [MKT_KEY]: newMarket() });
+
+  setInterval(async () => {
+    const cur = (await OBR.room.getMetadata())[MKT_KEY];
+    if (!cur || !cur.running) return;
+    await OBR.room.setMetadata({ [MKT_KEY]: stepMarket(cur) });
+  }, TICK_MS);
+});
+</script>
