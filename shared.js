@@ -94,7 +94,7 @@ export function newMarket() {
   }
   const m = {
     v: 3, tick: 0, running: true, vol: 1, autoNews: true, speed: TICK_MS,
-    news: "", newsLeft: 0, events: [], stocks
+    news: "", newsLeft: 0, events: [], stocks, steppedAt: Date.now()
   };
   m.index = indexOf(m); m.indexPrev = m.index;
   return m;
@@ -127,7 +127,13 @@ export function stepMarket(m) {
 
   const stocks = {};
   for (const s of STOCKS) {
-    const st = m.stocks[s.id];
+    // 防御：房间里如果残留半截行情，按初始价补齐，别让整个推进抛错卡死
+    const st = m.stocks[s.id] || {
+      price: s.p0, prevClose: s.p0, halt: false,
+      cur: { o: s.p0, h: s.p0, l: s.p0, c: s.p0, v: 0 }, bars: [], bt: 0
+    };
+    if (!Number.isFinite(st.price) || st.price <= 0) st.price = s.p0;
+    if (!Number.isFinite(st.prevClose) || st.prevClose <= 0) st.prevClose = st.price;
     if (st.halt) {
       stocks[s.id] = { ...st, bt: (st.bt || 0) + 1 };
       continue;
@@ -142,9 +148,9 @@ export function stepMarket(m) {
     const vol = 500 + Math.floor(Math.random() * 4500);
     let cur = { ...st.cur };
     cur.c = price;
-    cur.h = Math.max(cur.h, price);
-    cur.l = Math.min(cur.l, price);
-    cur.v = (cur.v || 0) + vol;
+    cur.h = Math.max(Number(cur.h) || price, price);
+    cur.l = Math.min(Number(cur.l) || price, price);
+    cur.v = (Number(cur.v) || 0) + vol;
 
     let bt = (st.bt || 0) + 1;
     let bars = st.bars || [];
@@ -159,7 +165,7 @@ export function stepMarket(m) {
   const out = {
     v: 3, tick, running: m.running !== false, vol: volMul,
     autoNews: m.autoNews !== false, speed: clampSpeed(m.speed),
-    news, newsLeft, events, stocks,
+    news, newsLeft, events, stocks, steppedAt: Date.now(),
     indexPrev: m.indexPrev ?? m.index ?? 1000
   };
   out.index = indexOf(out);

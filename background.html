@@ -19,17 +19,22 @@ OBR.onReady(async () => {
   // 每 1 秒查一次「该跳了吗」，而不是死等一个 setInterval：
   // GM 把 30 秒改成 1 秒时，最多 1 秒就生效。
   let elapsed = 0;
+  let lastStamp = (await OBR.room.getMetadata())[MKT_KEY]?.steppedAt || 0;
   async function loop() {
     let wait = TICK_MS;
     try {
       const cur = (await OBR.room.getMetadata())[MKT_KEY];
       if (cur) {
+        // 面板（GM 开着控制台时）也可能顶班推进行情；谁推的都算数，别重复跳
+        if (cur.steppedAt && cur.steppedAt !== lastStamp) { elapsed = 0; lastStamp = cur.steppedAt; }
         wait = clampSpeed(cur.speed);
         if (cur.running !== false && cur.stocks) {
           elapsed += 1000;
           if (elapsed >= wait) {
+            const next = stepMarket(cur);
             elapsed = 0;
-            await OBR.room.setMetadata({ [MKT_KEY]: stepMarket(cur) });
+            lastStamp = next.steppedAt;
+            await OBR.room.setMetadata({ [MKT_KEY]: next });
           }
         }
       }

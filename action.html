@@ -184,7 +184,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v2.0.4</span>
+    <span class="ver">v2.0.5</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -295,6 +295,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
       <button class="chip" id="gmRun">继续跳动</button>
       <button class="chip" id="gmPause">暂停</button>
       <span class="shint" id="gmRunState"></span>
+      <span class="shint" id="gmBeat"></span>
     </div>
     <div class="srow"><label>波动</label>
       <button class="chip" data-vol="0.4">平稳</button>
@@ -589,7 +590,8 @@ function render() {
   const evbar = $("#evbar");
   if (lastEv) {
     evbar.classList.remove("news");
-    evbar.innerHTML = `<span class="evtag">事件</span><span>${lastEv.title}${lastEv.desc ? " · " + lastEv.desc : ""}</span>`;
+    const sub = lastEv.desc && lastEv.desc !== lastEv.title ? " · " + lastEv.desc : "";
+    evbar.innerHTML = `<span class="evtag">事件</span><span>${lastEv.title}${sub}</span>`;
   } else if (mkt.news) {
     evbar.classList.add("news");
     evbar.innerHTML = `<span class="evtag">快讯</span><span>${mkt.news}</span>`;
@@ -974,6 +976,23 @@ async function connect() {
   });
   // 有人进出房间时刷新 GM 面板里的玩家列表
   OBR.party.onChange(() => { if (isGM) refreshPlayers(); });
+
+  // 心跳自检：正常由 background 推进；如果 OBR 把后台页挂起或它没跑起来，
+  // GM 这块面板自己顶班，行情不会停在原地。
+  let lastBeatStep = 0;
+  setInterval(async () => {
+    if (!isGM || !mkt) return;
+    const speed = clampSpeed(mkt.speed);
+    const idle = Date.now() - (mkt.steppedAt || 0);
+    const beat = $("#gmBeat");
+    if (beat) beat.textContent = mkt.steppedAt ? `· 最后推进 ${Math.max(0, Math.round(idle / 1000))} 秒前` : "";
+    if (mkt.running === false) return;
+    if (idle < Math.max(1200, speed * 1.2)) return;
+    if (Date.now() - lastBeatStep < speed * 0.8) return;
+    lastBeatStep = Date.now();
+    try { await applyMarket(m => stepMarket(m)); } catch (e) { /* 下一轮再试 */ }
+  }, 1000);
+
   toast("已连上 Owlbear，行情由 GM 的后台推进。");
 }
 
