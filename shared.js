@@ -26,8 +26,8 @@ export const CROWD_NEUTRAL = 50;  // 拥挤度中性值
 // ── 六个「上市产业」──────────────────────────────────────────────
 export const STOCKS = [
   { id: "KSLT", code: "600101", name: "卡萨兰特银行", sector: "金融", p0: 6.40, dp: 2, vol: 0.0058, drift: 0.00002, float: 20000, trust: 50 },
-  { id: "SNSA", code: "600102", name: "珊娜萨货运",   sector: "物流", p0: 1.25, dp: 2, vol: 0.0170, drift: 0.00004, float: 60000, trust: 50 },
-  { id: "MNSN", code: "600103", name: "曼松商会",     sector: "贸易", p0: 2.80, dp: 2, vol: 0.0105, drift: 0.00001, float: 30000, trust: 50 },
+  { id: "SNSA", code: "600102", name: "黑帆航运",   sector: "物流", p0: 1.25, dp: 2, vol: 0.0170, drift: 0.00004, float: 60000, trust: 50 },
+  { id: "MNSN", code: "600103", name: "星歌商会",     sector: "贸易", p0: 2.80, dp: 2, vol: 0.0105, drift: 0.00001, float: 30000, trust: 50 },
   { id: "JLRS", code: "600104", name: "贾拉索船务",   sector: "航运", p0: 0.85, dp: 2, vol: 0.0190, drift: -0.00002, float: 50000, trust: 50 },
   { id: "GLHD", code: "600105", name: "格拉汉德置业", sector: "地产", p0: 1.95, dp: 2, vol: 0.0135, drift: 0.00005, float: 40000, trust: 50 },
   { id: "WDPA", code: "600106", name: "深水城港务",   sector: "公用", p0: 5.10, dp: 2, vol: 0.0068, drift: 0.00001, float: 25000, trust: 50 }
@@ -42,7 +42,7 @@ export const PRESETS = [
   { id: "fireball", title: "火球炸城", desc: "巨魔颅骨巷一声巨响，半条街化为焦土。", imp: { GLHD: -9, KSLT: 2, WDPA: -1.5 }, ticks: 18 },
   { id: "bankrun", title: "卡萨兰特银行挤兑", desc: "兑付窗口排起长队，贵族们连夜转移金库。", imp: { KSLT: -8, GLHD: -3, WDPA: -2 }, ticks: 24 },
   { id: "fishbowl", title: "珊娜萨的鱼缸被抢", desc: "有人闯进巢穴，把希尔加连鱼带缸搬走了。", imp: { SNSA: -7, MNSN: 1 }, ticks: 18 },
-  { id: "shipwreck", title: "曼松的货船沉了", desc: "三艘商船在风暴中失踪，货主们堵在商会门口。", imp: { MNSN: -6, JLRS: 3 }, ticks: 24 },
+  { id: "shipwreck", title: "星歌的货船沉了", desc: "三艘商船在风暴中失踪，货主们堵在商会门口。", imp: { MNSN: -6, JLRS: 3 }, ticks: 24 },
   { id: "blockade", title: "贾拉索封锁港口", desc: "船队横在防波堤外，进出港的船都得交买路钱。", imp: { JLRS: 5, WDPA: -4, MNSN: -2 }, ticks: 24 },
   { id: "caravan", title: "商队节开幕", desc: "全城放假三天，码头和酒馆的流水翻了一倍。", imp: { WDPA: 2, MNSN: 2, GLHD: 1 }, ticks: 30 },
   { id: "strike", title: "公会日大罢工", desc: "码头工人封了栈桥，货栈的银子晒在太阳底下。", imp: { GLHD: -4, WDPA: -3, JLRS: 2 }, ticks: 24 },
@@ -53,7 +53,7 @@ export const PRESETS = [
   // ── 大事件：绑剧情用的重锤，幅度大、不封板 ──────────────────
   { id: "eyes_lost", title: "第三只眼不见了", desc: "戈罗尔之石的三只眼同一天失窃，几家商号的保险柜连夜换了锁。", imp: { SNSA: -16, MNSN: -6, KSLT: -4 }, ticks: 24 },
   { id: "sansa_rampage", title: "珊娜萨血洗码头", desc: "鱼缸空了之后，珊娜萨的打手把整条码头街掀了一遍。", imp: { SNSA: -24, JLRS: -10, WDPA: -8, KSLT: -4 }, ticks: 18 },
-  { id: "manshoon_leak", title: "曼松的名字上了头版", desc: "《深水城之眼》头版印着曼松的真名，商会股价当场崩了。", imp: { MNSN: -26, KSLT: 8, GLHD: 6 }, ticks: 24 },
+  { id: "manshoon_leak", title: "星歌的名字上了头版", desc: "《深水城之眼》头版印着星歌的真名，商会股价当场崩了。", imp: { MNSN: -26, KSLT: 8, GLHD: 6 }, ticks: 24 },
   { id: "cassalanter_due", title: "卡萨兰特的契约到期", desc: "九十九万九千九百九十九金币的账单摆在桌上，午夜之前必须清。", imp: { KSLT: -30, GLHD: -12, WDPA: -7 }, ticks: 18 },
   { id: "jarlaxle_sails", title: "贾拉索的船队离港", desc: "二十艘船同时起锚，港口只剩下空泊位和押金的传说。", imp: { JLRS: -22, WDPA: -10, MNSN: -5 }, ticks: 30 },
   { id: "dragon_wakes", title: "红龙醒了", desc: "宝库深处的呼吸声传到了街上，所有人同时想起自己欠了谁的钱。", imp: { KSLT: -18, MNSN: -20, GLHD: -25, SNSA: -15, JLRS: -12, WDPA: -10 }, ticks: 18 },
@@ -130,7 +130,7 @@ const BIG_EVENTS = [
   // ── 坏事 · 1 小时 ──
   { id: "goldheist_exposed", side: "bad", owner: "KSLT", title: "金龙劫案曝光", desc: "五十万龙金的账被捅到街上，全城银行门口排起长队。", imp: { KSLT: -24, GLHD: -12, MNSN: -8, WDPA: -6 }, trust: { KSLT: -26, GLHD: -14, MNSN: -8 }, durMin: 60, crowd: -60 },
   { id: "fishbowl_smashed", side: "bad", owner: "SNSA", title: "珊娜萨的鱼缸被砸", desc: "有人把希尔加的金鱼缸从三楼扔了下来，珊娜萨疯了。", imp: { SNSA: -30, MNSN: -8 }, trust: { SNSA: -32 }, durMin: 60, crowd: -55 },
-  { id: "black_ledger_leaked", side: "bad", owner: "MNSN", title: "曼松的黑账本落到竖琴手手里", desc: "账本上每一个名字都被念了出来，商会的门一整天没开。", imp: { MNSN: -28, KSLT: -6 }, trust: { MNSN: -32, KSLT: -4 }, durMin: 60, crowd: -50 },
+  { id: "black_ledger_leaked", side: "bad", owner: "MNSN", title: "星歌的黑账本落到竖琴手手里", desc: "账本上每一个名字都被念了出来，商会的门一整天没开。", imp: { MNSN: -28, KSLT: -6 }, trust: { MNSN: -32, KSLT: -4 }, durMin: 60, crowd: -50 },
   { id: "cassalanter_fire", side: "bad", owner: "KSLT", title: "卡萨兰特庄园起火", desc: "火从书房烧到宴会厅，救火的人说看见有人往里泼油。", imp: { KSLT: -25, GLHD: -10 }, trust: { KSLT: -24, GLHD: -8 }, durMin: 60, crowd: -45 },
   { id: "jarlaxle_seized", side: "bad", owner: "JLRS", title: "贾拉索的船队被扣", desc: "城防以走私为由扣了整支船队，泊位上全是空缆绳。", imp: { JLRS: -26, WDPA: -10 }, trust: { JLRS: -22, WDPA: -6 }, durMin: 60, crowd: -40 },
   { id: "glhd_tower_collapse", side: "bad", owner: "GLHD", title: "格拉汉德的塔塌了", desc: "新盖的塔在验收当天塌了半边，压死了三个工匠。", imp: { GLHD: -30, SNSA: -6 }, trust: { GLHD: -30 }, durMin: 60, crowd: -50 },
@@ -143,7 +143,7 @@ const BIG_EVENTS = [
   { id: "hoard_deposited", side: "good", owner: "KSLT", title: "五十万龙金入库", desc: "金库的门开了一条缝，全城的债主突然都不急了。", imp: { KSLT: 14, GLHD: 10, MNSN: 8, SNSA: 6, JLRS: 6, WDPA: 8 }, trust: { KSLT: 16, GLHD: 12, MNSN: 8 }, durMin: 60, crowd: 55 },
   { id: "city_audit", side: "good", owner: "WDPA", title: "城主公开审计", desc: "审计官把账本一页页念完，街上的谣言反而少了。", imp: { KSLT: 10, MNSN: 8, GLHD: 8, WDPA: 10 }, trust: { KSLT: 14, MNSN: 10, GLHD: 10, WDPA: 14 }, durMin: 60, crowd: 35 },
   { id: "sansa_peace", side: "good", owner: "SNSA", title: "珊娜萨与商会和解", desc: "两家人坐在同一张桌子上签了字，码头上的刀收了起来。", imp: { SNSA: 14, MNSN: 8, WDPA: 4 }, trust: { SNSA: 14, MNSN: 6 }, durMin: 60, crowd: 35 },
-  { id: "manshoon_fall", side: "good", owner: "MNSN", title: "曼松倒台", desc: "商会连夜换了掌柜，旧账一把火烧了个干净。", imp: { MNSN: 18, KSLT: 4 }, trust: { MNSN: 20, KSLT: 4 }, durMin: 60, crowd: 40 },
+  { id: "manshoon_fall", side: "good", owner: "MNSN", title: "星歌倒台", desc: "商会连夜换了掌柜，旧账一把火烧了个干净。", imp: { MNSN: 18, KSLT: 4 }, trust: { MNSN: 20, KSLT: 4 }, durMin: 60, crowd: 40 },
   { id: "cassalanter_peace", side: "good", owner: "KSLT", title: "卡萨兰特与竖琴手和解", desc: "双方在码头仓库见了面，出来时都没有带武器。", imp: { KSLT: 15, MNSN: 5 }, trust: { KSLT: 18, MNSN: 4 }, durMin: 60, crowd: 35 },
   { id: "jarlaxle_pardon", side: "good", owner: "JLRS", title: "贾拉索获赦", desc: "城主签了赦令，船队挂旗的那天码头挤满了人。", imp: { JLRS: 16, WDPA: 6 }, trust: { JLRS: 14, WDPA: 4 }, durMin: 60, crowd: 40 },
   { id: "harbor_expansion", side: "good", owner: "WDPA", title: "港口扩建竣工", desc: "新栈桥能同时停十二艘大船，第一艘进港时全城去看。", imp: { WDPA: 15, JLRS: 8, MNSN: 5 }, trust: { WDPA: 14, JLRS: 6 }, durMin: 60, crowd: 45 },
@@ -173,18 +173,18 @@ for (const p of PRESETS) {
   if (!p.owner) p.owner = "WDPA";
 }
 
-// 补齐各势力的「好事」：之前偏科，珊娜萨/曼松/贾拉索/格拉汉德的好消息太少
+// 补齐各势力的「好事」：之前偏科，珊娜萨/星歌/贾拉索/格拉汉德的好消息太少
 const BALANCE_EVENTS = [
-  // 珊娜萨货运
+  // 黑帆航运
   { id: "sansa_truce", side: "good", owner: "SNSA", title: "珊娜萨与竖琴手停战", desc: "两边在码头仓库划了界，刀口朝下。", imp: { SNSA: 12, MNSN: 3 }, trust: { SNSA: 12 }, durMin: 30, crowd: 30 },
   { id: "sansa_orphanage", side: "good", owner: "SNSA", title: "珊娜萨捐建孤儿院", desc: "码头区最破的那条街上，新院子挂起了珊娜萨的旗。", imp: { SNSA: 8, WDPA: 3 }, trust: { SNSA: 14 }, durMin: 20, crowd: 25 },
   { id: "sansa_landmark", side: "good", owner: "SNSA", title: "珊娜萨的鱼缸成了城标", desc: "那条金鱼上了明信片，游客排队来看。", imp: { SNSA: 10, WDPA: 4 }, trust: { SNSA: 10 }, durMin: 30, crowd: 30 },
   { id: "sansa_warehouse", side: "good", owner: "SNSA", title: "珊娜萨开放码头仓储", desc: "空了三年的仓库重新堆满货，搬运工有了活干。", imp: { SNSA: 9, WDPA: 4, MNSN: 3 }, trust: { SNSA: 10, WDPA: 4 }, durMin: 30, crowd: 25 },
 
-  // 曼松商会
-  { id: "manshoon_tender", side: "good", owner: "MNSN", title: "曼松商会公开招标", desc: "标书贴满了公告栏，连小商号也领到了份额。", imp: { MNSN: 10, GLHD: 3 }, trust: { MNSN: 10 }, durMin: 20, crowd: 25 },
+  // 星歌商会
+  { id: "manshoon_tender", side: "good", owner: "MNSN", title: "星歌商会公开招标", desc: "标书贴满了公告栏，连小商号也领到了份额。", imp: { MNSN: 10, GLHD: 3 }, trust: { MNSN: 10 }, durMin: 20, crowd: 25 },
   { id: "guild_apprentice", side: "good", owner: "MNSN", title: "商会设立学徒基金", desc: "第一批学徒进了账房，街上少了些闲汉。", imp: { MNSN: 7, WDPA: 3 }, trust: { MNSN: 12 }, durMin: 20, crowd: 20 },
-  { id: "manshoon_reorg", side: "good", owner: "MNSN", title: "曼松商会改组", desc: "新章程把旧掌柜的亲信全清了出去。", imp: { MNSN: 14, KSLT: 3 }, trust: { MNSN: 14 }, durMin: 30, crowd: 30 },
+  { id: "manshoon_reorg", side: "good", owner: "MNSN", title: "星歌商会改组", desc: "新章程把旧掌柜的亲信全清了出去。", imp: { MNSN: 14, KSLT: 3 }, trust: { MNSN: 14 }, durMin: 30, crowd: 30 },
   { id: "guild_harbor_deal", side: "good", owner: "MNSN", title: "商会与港务签长期仓储协议", desc: "十年的租约，码头和商会各让了一步。", imp: { MNSN: 9, WDPA: 4 }, trust: { MNSN: 8, WDPA: 6 }, durMin: 20, crowd: 20 },
 
   // 贾拉索船务
@@ -230,32 +230,32 @@ export function addCrowd(m, ids, delta) {
 
 export const NEWS_FLAVOR = [
   { imp: { WDPA: 1.2 }, t: "【港口】海之少女嘉年华宣布驻留一季，码头生意火爆。" },
-  { imp: { MNSN: -1.5 }, t: "【商会】曼松商会否认与散塔林有往来，记者被请出门。" },
+  { imp: { MNSN: -1.5 }, t: "【商会】星歌商会否认与散塔林有往来，记者被请出门。" },
   { imp: { SNSA: 1.8 }, t: "【码头区】夜里有三十辆无标记货车进城，没人敢问装的是什么。" },
   { imp: { KSLT: -1.2 }, t: "【金融】卡萨兰特银行上调储备金率，小商户怨声载道。" },
   { imp: { JLRS: 1.6 }, t: "【航运】卢斯坎私掠船连截三艘商船，保费上调。" },
   { imp: { GLHD: 1.2 }, t: "【地产】北区两块地皮被匿名买家拍走，价格高得离谱。" },
   { imp: { KSLT: 1.0 }, t: "【金融】卡萨兰特银行公布季度储备，数字比传闻好看。" },
   { imp: { SNSA: -1.4 }, t: "【码头区】珊娜萨的货舱进了水，湿了三成香料。" },
-  { imp: { MNSN: 1.2 }, t: "【商会】曼松商会拿下北区军械订单。" },
+  { imp: { MNSN: 1.2 }, t: "【商会】星歌商会拿下北区军械订单。" },
   { imp: { JLRS: -1.6 }, t: "【航运】贾拉索的一艘快船在迷雾中失联。" },
   { imp: { GLHD: -1.1 }, t: "【地产】北区地契查出伪造，交易被叫停。" },
   { imp: { WDPA: -1.3 }, t: "【港口】防波堤塌了一段，大船排队等泊位。" },
   { imp: { KSLT: -1.8 }, t: "【金融】卡萨兰特银行的兑付窗口提前关门。" },
   { imp: { SNSA: 1.5 }, t: "【码头区】珊娜萨包下整条鲸油街的仓库。" },
-  { imp: { MNSN: -1.0 }, t: "【商会】曼松商会的账房先生连夜辞职。" },
+  { imp: { MNSN: -1.0 }, t: "【商会】星歌商会的账房先生连夜辞职。" },
   { imp: { JLRS: 1.7 }, t: "【航运】卢斯坎的私掠船退回了外海。" },
   { imp: { GLHD: 1.4 }, t: "【地产】巨魔颅骨巷的地价被一笔匿名买盘抬高。" },
   { imp: { WDPA: 1.9 }, t: "【港口】深水城港务宣布加开夜班泊位。" },
   { imp: { WDPA: 0.8 }, t: "【港口】海关换了个新关长，报关单多盖一个章。" },
   { imp: { WDPA: -1.5 }, t: "【港口】三桅船「海之少女」撞断栈桥，码头封了半天。" },
   { imp: { JLRS: 1.1 }, t: "【航运】灯塔修好了，夜航保费下调一成。" },
-  { imp: { MNSN: -1.7 }, t: "【商会】曼松商会的仓库半夜起火，烧掉半仓丝绸。" },
+  { imp: { MNSN: -1.7 }, t: "【商会】星歌商会的仓库半夜起火，烧掉半仓丝绸。" },
   { imp: { KSLT: 0.9 }, t: "【金融】卡萨兰特银行发行新一期城债券，半天售罄。" },
   { imp: { GLHD: 1.6 }, t: "【地产】南区新桥动工，桥头地价先涨为敬。" },
   { imp: { SNSA: -1.2 }, t: "【码头区】鱼市查出掺假，珊娜萨的冷库被封了三天。" },
   { imp: { JLRS: -0.9 }, t: "【航运】外海连着三天大雾，船期全乱。" },
-  { imp: { MNSN: 1.3 }, t: "【商会】曼松包下整场拍卖会，槌声一响黄金万两。" },
+  { imp: { MNSN: 1.3 }, t: "【商会】星歌包下整场拍卖会，槌声一响黄金万两。" },
   { imp: { WDPA: 1.4 }, t: "【港口】捕鲸船队满载回港，鲸油价格应声下跌。" },
   { imp: { KSLT: -0.8 }, t: "【金融】有个兑付窗口排起长队，保安加了双岗。" },
   { imp: { GLHD: -1.5 }, t: "【地产】北区一栋旧楼塌了半边，住户堵在门口。" },
@@ -267,7 +267,7 @@ export const NEWS_FLAVOR = [
   { imp: { GLHD: 0.9 }, t: "【地产】巨魔颅骨巷整修完毕，房租涨了一截。" },
   { imp: { SNSA: -0.8 }, t: "【码头区】码头区查出一批无主货，珊娜萨急着撇清。" },
   { imp: { JLRS: -1.3 }, t: "【航运】卢斯坎私掠船又出现了，商船绕道。" },
-  { imp: { MNSN: 1.5 }, t: "【商会】曼松和北区铁匠行会签了长约。" },
+  { imp: { MNSN: 1.5 }, t: "【商会】星歌和北区铁匠行会签了长约。" },
   { imp: { WDPA: 1.0 }, t: "【港口】新泊位启用，大船不用再排队。" },
   { imp: { KSLT: -1.4 }, t: "【金融】卡萨兰特的一位大客户突然提空了金库。" },
   { imp: { GLHD: 1.3 }, t: "【地产】匿名买家一口气买下三条街的铺面。" },
@@ -309,21 +309,21 @@ export const NEWS_FLAVOR = [
   { imp: { SNSA: -0.6 }, t: "【码头区】码头区抱怨鱼价太贵。" },
   { imp: { SNSA: 0.8 }, t: "【码头区】珊娜萨和盐商签了长约。" },
   { imp: { SNSA: -1.4 }, t: "【码头区】一仓咸鱼被查出有毒。" },
-  { imp: { MNSN: 1.2 }, t: "【商会】曼松签下北区军械的大单。" },
+  { imp: { MNSN: 1.2 }, t: "【商会】星歌签下北区军械的大单。" },
   { imp: { MNSN: -1.4 }, t: "【商会】商会仓库盘点少了两成货。" },
-  { imp: { MNSN: 0.9 }, t: "【商会】曼松赞助工匠行会的学徒赛。" },
+  { imp: { MNSN: 0.9 }, t: "【商会】星歌赞助工匠行会的学徒赛。" },
   { imp: { MNSN: -1.1 }, t: "【商会】商会拒绝赔付沉船的货主。" },
-  { imp: { MNSN: 1.5 }, t: "【商会】曼松拿下城北的粮道。" },
+  { imp: { MNSN: 1.5 }, t: "【商会】星歌拿下城北的粮道。" },
   { imp: { MNSN: -0.8 }, t: "【商会】账房先生带着账本跑了。" },
   { imp: { MNSN: 1.0 }, t: "【商会】商会开仓平抑粮价，口碑大好。" },
   { imp: { MNSN: -1.6 }, t: "【商会】一列车队在城郊被劫。" },
-  { imp: { MNSN: 1.3 }, t: "【商会】曼松与矮人铁匠签了长约。" },
+  { imp: { MNSN: 1.3 }, t: "【商会】星歌与矮人铁匠签了长约。" },
   { imp: { MNSN: -0.9 }, t: "【商会】商会会馆的屋顶塌了。" },
-  { imp: { MNSN: 0.7 }, t: "【商会】曼松捐了一笔修城墙的钱。" },
+  { imp: { MNSN: 0.7 }, t: "【商会】星歌捐了一笔修城墙的钱。" },
   { imp: { MNSN: -1.2 }, t: "【商会】有人揭发商会以次充好。" },
   { imp: { MNSN: 1.4 }, t: "【商会】商会的拍卖会拍出天价。" },
   { imp: { MNSN: -1.5 }, t: "【商会】三间分号同时起火。" },
-  { imp: { MNSN: 1.1 }, t: "【商会】曼松包下商队节的主展位。" },
+  { imp: { MNSN: 1.1 }, t: "【商会】星歌包下商队节的主展位。" },
   { imp: { MNSN: -0.6 }, t: "【商会】商会的秤被指做了手脚。" },
   { imp: { MNSN: 0.8 }, t: "【商会】商会雇了新的护卫队。" },
   { imp: { MNSN: -1.3 }, t: "【商会】货主集体上门讨说法。" },
@@ -433,31 +433,31 @@ export const NEWS_FLAVOR = [
   { imp: { SNSA: 0.8 }, t: "【码头区】鱼市节办得热闹，珊娜萨抽成不少。" },
   { imp: { SNSA: -0.9 }, t: "【码头区】冷库的电费涨了。" },
   { imp: { SNSA: 1.3 }, t: "【码头区】珊娜萨买下鲸油街的仓库。" },
-  { imp: { MNSN: 1.0 }, t: "【商会】曼松包下北区的粮仓。" },
+  { imp: { MNSN: 1.0 }, t: "【商会】星歌包下北区的粮仓。" },
   { imp: { MNSN: -1.2 }, t: "【商会】一车丝绸在城门口被雨淋了。" },
   { imp: { MNSN: 0.8 }, t: "【商会】商会给工匠行会捐了奖学金。" },
   { imp: { MNSN: -1.5 }, t: "【商会】商队在山口被劫，护卫跑了。" },
-  { imp: { MNSN: 1.4 }, t: "【商会】曼松拿下军械的独家供货。" },
+  { imp: { MNSN: 1.4 }, t: "【商会】星歌拿下军械的独家供货。" },
   { imp: { MNSN: -0.8 }, t: "【商会】分号的招牌掉下来砸了人。" },
   { imp: { MNSN: 1.2 }, t: "【商会】商会和矮人签了矿石长约。" },
   { imp: { MNSN: -1.6 }, t: "【商会】商会仓库的地契出了问题。" },
-  { imp: { MNSN: 0.7 }, t: "【商会】曼松包下商队节的摊位。" },
+  { imp: { MNSN: 0.7 }, t: "【商会】星歌包下商队节的摊位。" },
   { imp: { MNSN: -1.1 }, t: "【商会】货主投诉商会短斤少两。" },
   { imp: { MNSN: 1.5 }, t: "【商会】商会接下了城卫队的冬装订单。" },
   { imp: { MNSN: -1.2 }, t: "【商会】账房查出一笔糊涂账。" },
-  { imp: { MNSN: 1.0 }, t: "【商会】曼松在拍卖会上捡了个大漏。" },
+  { imp: { MNSN: 1.0 }, t: "【商会】星歌在拍卖会上捡了个大漏。" },
   { imp: { MNSN: -0.9 }, t: "【商会】商会的护卫队集体辞职。" },
   { imp: { MNSN: 1.3 }, t: "【商会】商会开通了北区的新商路。" },
   { imp: { MNSN: -1.4 }, t: "【商会】一车香料翻进了河里。" },
-  { imp: { MNSN: 0.8 }, t: "【商会】曼松请全城工匠喝了酒。" },
+  { imp: { MNSN: 0.8 }, t: "【商会】星歌请全城工匠喝了酒。" },
   { imp: { MNSN: -1.3 }, t: "【商会】商会会馆被人泼了粪。" },
   { imp: { MNSN: 1.2 }, t: "【商会】商会给孤儿院送了冬衣。" },
   { imp: { MNSN: -0.7 }, t: "【商会】有人冒用商会的名号收货。" },
-  { imp: { MNSN: 1.1 }, t: "【商会】曼松和港务签了仓储协议。" },
+  { imp: { MNSN: 1.1 }, t: "【商会】星歌和港务签了仓储协议。" },
   { imp: { MNSN: -1.5 }, t: "【商会】商会的银库被撬了。" },
   { imp: { MNSN: 0.9 }, t: "【商会】商会新雇的账房很得力。" },
   { imp: { MNSN: -1.0 }, t: "【商会】商队节上商会的摊位被砸。" },
-  { imp: { MNSN: 1.4 }, t: "【商会】曼松低价收了一批抛售的货。" },
+  { imp: { MNSN: 1.4 }, t: "【商会】星歌低价收了一批抛售的货。" },
   { imp: { JLRS: 1.1 }, t: "【航运】贾拉索的船队添了一条新快船。" },
   { imp: { JLRS: -1.2 }, t: "【航运】一艘货船在浅滩搁浅。" },
   { imp: { JLRS: 0.9 }, t: "【航运】船务开通了夜航。" },
@@ -703,7 +703,7 @@ export function stepMarket(m) {
       const st = stocks[id], s0 = e.start && Number(e.start[id]);
       if (st && s0 > 0) moves.push({ id, pct: Number(((st.price / s0 - 1) * 100).toFixed(2)) });
     }
-    if (moves.length) history.push({ at: tick, title: e.title, ticks: e.total, mins: e.mins || 0, trust: e.trust || {}, moves });
+    if (moves.length) history.push({ at: tick, title: e.title, ticks: e.total, mins: e.mins || 0, trust: e.trust || {}, plan: e.imp || {}, moves });
   }
   if (history.length > 20) history = history.slice(-20);
 

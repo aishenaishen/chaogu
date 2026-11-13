@@ -192,6 +192,9 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
 .evlog .lg{display:flex;gap:8px;font-size:11px;color:#5d6d66;padding:3px 7px;border-radius:7px;background:#faf9f4}
 .evlog .lg b{color:#3f4f48;font-weight:600}
 .evlog .up{color:#c9432f}.evlog .dn{color:#12855c}
+.publog{margin-top:10px;border-top:1px dashed #ded5c2;padding-top:8px}
+.publog-h{font-size:10px;letter-spacing:.12em;color:#a08b6a;margin-bottom:6px}
+.publog .evlog{max-height:96px}
 
 @media (max-width:900px){
   .grid{grid-template-columns:1fr;min-height:0}
@@ -207,7 +210,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div class="logo">交</div>
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
-    <span class="ver">v3.3.0</span>
+    <span class="ver">v3.4.1</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -281,6 +284,10 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
             <span class="evtag">快讯</span>
             <span class="evtxt" id="evtext">牌价平稳，等城主发话。</span>
           </div>
+        </div>
+        <div class="publog" id="publog" hidden>
+          <div class="publog-h">事件回溯 · 最近走完的城主事件</div>
+          <div class="evlog" id="evlogPub"></div>
         </div>
       </section>
 
@@ -427,7 +434,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
       <button class="btn" id="gmEvStep">推一拍</button>
     </div>
     <div class="evlist" id="evlist"></div>
-    <div class="shint" style="margin-top:10px">事件回溯（走完的城主事件：持续跳数 与 实际涨跌）</div>
+    <div class="shint" style="margin-top:12px;font-weight:600;color:#5d4a2f">事件回溯 · 最近 8 条（走完的城主事件：时长、目标幅度、实际涨跌、信心变化）</div>
     <div class="evlog" id="evlog"></div>
     <div class="shint" id="gmDbg"></div>
 
@@ -751,6 +758,7 @@ async function setBalance(playerId, cash) {  if (DEMO) {
 
 /* ---------- 渲染 ---------- */
 function render() {
+  renderPubLog();
   if (!hasStocks(mkt)) return;
   const st = mkt.stocks[pid];
   if (!st) return;
@@ -870,6 +878,21 @@ function calc() {
 function normalizeShares(v) {
   const n = Math.floor(Number(v) || 0);
   return n >= LOT ? Math.floor(n / LOT) * LOT : 0;
+}
+
+function renderPubLog() {
+  const pub = $("#publog"), pubList = $("#evlogPub");
+  if (!pub || !pubList || !mkt) return;
+  const h = (mkt.history || []).slice(-5).reverse();
+  pub.hidden = !h.length;
+  pubList.innerHTML = h.map(x => {
+    const mv = (x.moves || []).map(m => {
+      const nm = ((STOCKS.find(s => s.id === m.id) || {}).name || m.id).replace(/^深水城/, "").slice(0, 4);
+      return `<span class="${m.pct >= 0 ? "up" : "dn"}">${nm} ${m.pct >= 0 ? "+" : ""}${m.pct}%</span>`;
+    }).join(" ");
+    const dur = x.mins ? x.mins + " 分钟" : x.ticks + " 跳";
+    return `<div class="lg"><b>${x.title}</b><span>${dur}</span>${mv}</div>`;
+  }).join("");
 }
 
 function drawChart() {
@@ -1133,7 +1156,11 @@ function gmSync() {
           const d = x.trust[id];
           return `<span class="${d >= 0 ? "up" : "dn"}">${nm} 信心${d >= 0 ? "+" : ""}${d}</span>`;
         }).join(" ");
-        return `<div class="lg"><b>${x.title}</b><span>${dur}</span>${mv}${tchg}</div>`;
+        const plan = Object.keys(x.plan || {}).map(id => {
+          const nm = ((STOCKS.find(s => s.id === id) || {}).name || id).replace(/^深水城/, "").slice(0, 4);
+          return nm + " " + (x.plan[id] >= 0 ? "+" : "") + x.plan[id] + "%";
+        }).join(" / ");
+        return `<div class="lg"><b>${x.title}</b><span>${dur}</span><span style="color:#9a8b74">目标 ${plan || "—"}</span>${mv}${tchg}</div>`;
       }).join("") : `<div class="shint">还没有走完的城主事件。</div>`;
     } catch (e) { log.textContent = "回溯渲染失败：" + e.message; }
   }
