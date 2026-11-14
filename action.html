@@ -224,7 +224,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
       <span id="actBadge" class="cnt" hidden></span>
-    <span class="ver">v3.16.0</span>
+    <span class="ver">v3.16.1</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -1081,7 +1081,7 @@ function noteBuf(m) {
 function seedBuf() {
   for (const id of Object.keys(priceBuf)) delete priceBuf[id];
   if (!mkt) return;
-  const per = Math.max(1, (Number(mkt.barSec) || DEFAULT_BAR_SEC) / SEC_PER_TICK);
+  const per = Math.max(1, barSecLocal / SEC_PER_TICK);
   for (const id of Object.keys(mkt.stocks || {})) {
     const st = mkt.stocks[id], base = Math.max(0, mkt.tick - per * ((st.bars || []).length + 1));
     const arr = priceBuf[id] = [];
@@ -1090,7 +1090,7 @@ function seedBuf() {
       arr.push({ t: Math.round(base + per * i), p: Number(c) });
     });
     // 用已存的当前周期 K 线，给该周期补一条可继续的序列
-    const sec = Number(mkt.barSec) || DEFAULT_BAR_SEC;
+    const sec = barSecLocal;
     const bag = tfBars[id] || (tfBars[id] = {});
     const bars = st.bars || [];
     if (bars.length) {
@@ -1134,7 +1134,7 @@ function drawChart() {
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, W, H);
 
-  const bs = Number(mkt?.barSec) || DEFAULT_BAR_SEC;
+  const bs = barSecLocal;
   document.querySelectorAll("#tfChips [data-tf]").forEach(b => b.classList.toggle("on", Number(b.dataset.tf) === bs));
   const hint = $("#tfHint");
   if (hint) {
@@ -1576,36 +1576,26 @@ const tfTicks = sec => (sec / 2).toFixed(sec % 2 ? 1 : 0).replace(/\.0$/, "");
 $("#tfChips").innerHTML = BAR_SEC_CHOICES.map(sec =>
   `<button class="chip" data-tf="${sec}">${tfLabel(sec)}</button>`).join("");
 $("#chartPan").oninput = ev => { chartBack = Math.max(0, Number(ev.target.value) || 0); drawChart(); };
-$("#tfChips").onclick = async ev => {
+$("#tfChips").onclick = ev => {
   const b = ev.target.closest("[data-tf]");
   if (!b) return;
   const sec = Number(b.dataset.tf);
+  if (!BAR_SEC_CHOICES.includes(sec)) return;
+  barSecLocal = sec;
+  try { localStorage.setItem("gx-barsec", String(sec)); } catch (e) {}
   chartBack = 0;
-  await applyMarket(m => {
-    m.barSec = sec;
-    for (const id of Object.keys(m.stocks || {})) {
-      const st = m.stocks[id];
-      const own = (tfBars[id] && tfBars[id][sec]) || null;
-      const rb = rebuildBars(id, sec) || [];
-      // 刚切过来时「自己的序列」可能只有一两根，用逐跳缓存补足历史
-      const use = own && own.length >= Math.min(6, rb.length)
-        ? own.map(x => ({ o: x.o, h: x.h, l: x.l, c: x.c }))
-        : rb.map(x => ({ o: x[0], h: x[1], l: x[2], c: x[3] }));
-      if (use.length && !(own && own.length >= use.length)) {
-        const tail = Math.floor(m.tick * SEC_PER_TICK / sec);
-        tfBars[id] = tfBars[id] || {};
-        tfBars[id][sec] = use.map((x, i) => ({ b: tail - (use.length - 1 - i), o: x.o, h: x.h, l: x.l, c: x.c }));
-      }
-      st.bars = use.slice(-MAX_BARS).map(x => [x.o, x.h, x.l, x.c]);
-      st.bt = 0;
-      st.cur = { o: st.price, h: st.price, l: st.price, c: st.price, v: 0 };
-    }
-    return m;
-  });
-  SFX.ok();
-  toast("K 线周期：" + tfLabel(sec) + " / 根（约 " + tfTicks(sec) + " 跳）。");
-  render();
+  for (const id of Object.keys(mkt.stocks || {})) {
+    const st = mkt.stocks[id];
+    const own = (tfBars[id] && tfBars[id][sec]) || null;
+    const rb = rebuildBars(id, sec) || [];
+    const use = own && own.length >= Math.min(6, rb.length)
+      ? own.map(x => ({ o: x.o, h: x.h, l: x.l, c: x.c }))
+      : rb.map(x => ({ o: x[0], h: x[1], l: x[2], c: x[3] }));
+    if (use.length) st.bars = use.slice(-MAX_BARS);
+  }
+  render(); SFX.tick();
 };
+
 
 $("#gmStock").innerHTML = STOCKS.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
   const OWNER_ORDER = ["KSLT","SNSA","MNSN","JLRS","GLHD","WDPA"];
@@ -2050,11 +2040,13 @@ async function connect() {
   toast("已连上 Owlbear，行情由你的面板推进（关掉面板后由后台接手）。");
 }
 
+window.addEventListener('error', e => { window.__lastErr = e.message; });
 window.__setCircuit = () => { if (mkt) { mkt.circuitUntil = (mkt.tick || 0) + 8; render(); } };
   window.__diag = () => ({ tick: mkt && mkt.tick, isGM, DEMO, driver: !!driverTimer, speed: mkt && mkt.speed, steppedAgo: mkt && mkt.steppedAt ? Date.now() - mkt.steppedAt : null, running: mkt && mkt.running, lastBy: mkt && mkt.lastBy, hist: mkt && (mkt.history || []).length, evs: mkt && (mkt.events || []).map(e => [e.title.slice(0,4), e.left, e.ticks]) });
 let driverTimer = null;
 let chartBack = 0;
 let metaBytes = 0;
+let barSecLocal = Number(localStorage.getItem("gx-barsec")) || DEFAULT_BAR_SEC;
 let actAs = "";                 // GM 代客下单：空=自己，否则是玩家 id
 const accPid = () => actAs || myId;
 function paintActBadge() {
