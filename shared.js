@@ -20,7 +20,7 @@ export const FEE_MIN = 0.1;       // 最低佣金 1 银
 export const LOT = 10;            // 一手 10 股（费伦的钱小，一手别太贵）
 export const LIMIT = 0.10;        // 涨跌停 ±10%
 export const TICKS_PER_DAY = 480; // 一天 480 跳
-export const SETTLE_TICKS = 6;    // 卖出后 6 跳（一根 K）才交收
+export const SETTLE_TICKS = 3;    // 卖出后 6 跳（一根 K）才交收
 export const CROWD_NEUTRAL = 50;  // 拥挤度中性值
 
 // ── 六个「上市产业」──────────────────────────────────────────────
@@ -737,8 +737,10 @@ export function releasePending(acc, tick) {
   let sum = 0;
   for (const p of (acc.pending || [])) {
     if (!p || !Number.isFinite(Number(p.amt))) continue;
-    if (tick >= (Number(p.due) || 0)) sum += Number(p.amt);
-    else keep.push({ amt: Number(p.amt), due: Number(p.due) || 0 });
+    const due = Number(p.due);
+    // 到期，或 due 丢失，或 due 在遥远未来（快照回滚导致的死结），都当到期处理
+    if (!Number.isFinite(due) || tick >= due || due - tick > 600) sum += Number(p.amt);
+    else keep.push({ amt: Number(p.amt), due });
   }
   acc.pending = keep;
   acc.cash = (Number(acc.cash) || 0) + sum;

@@ -214,7 +214,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
       <span id="actBadge" class="cnt" hidden></span>
-    <span class="ver">v3.11.0</span>
+    <span class="ver">v3.13.0</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -323,7 +323,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
           <div class="posline"><span>待交收</span><span><b id="pPending">0.00</b> 金币</span></div>
           <div class="posline"><span>流动性</span><span id="pLiq">—</span></div>
           <button class="closebtn" id="btnClose" disabled>清仓</button>
-          <div class="fhint">T+1：卖出后 6 跳到账，待交收处显示倒计时。买跌（融券）押 50% 押金，亏光押金自动平仓。</div>
+          <div class="fhint"><span id="fhintSettle">卖出后 3 跳到账</span>，待交收处显示倒计时。买跌（融券）押 50% 押金，亏光押金自动平仓。</div>
         </section>
         <section class="card tipcard">
           <div class="tipt">老雅诺的规矩</div>
@@ -358,6 +358,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
       <button class="btn" id="gmResetMkt">重置全部股票</button>
       <button class="btn" id="gmResetPlayers">重置玩家资金</button>
       <button class="btn" id="gmMargin">强平检查</button>
+        <button class="btn" id="gmSettleAll">结清待交收</button>
       <span class="shint">股票回到发行价、清 K 线事件；玩家钱清零、清空持仓；强平检查扫全桌空单</span>
     </div>
     <div class="srow"><label>存档</label>
@@ -389,7 +390,15 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
       <input class="inp w" id="gmSpeed" type="number" min="1" max="60" step="1" value="5">
       <button class="btn" id="gmSpeedGo">秒 / 跳</button>
     </div>
-    <div class="srow"><label>随机新闻</label>
+        <div class="srow"><label>交收</label>
+      <button class="chip" data-settle="1">1 跳</button>
+      <button class="chip" data-settle="2">2 跳</button>
+      <button class="chip" data-settle="3">3 跳</button>
+      <button class="chip" data-settle="6">6 跳</button>
+      <button class="chip" data-settle="12">12 跳</button>
+      <span class="shint">卖出后多少跳才到账</span>
+    </div>
+<div class="srow"><label>随机新闻</label>
       <button class="chip" id="gmAutoNews">开</button>
       <span class="shint">开：每跳 3% 概率蹦一条随机快讯并小幅冲击</span>
     </div>
@@ -757,6 +766,8 @@ async function saveAcc() {
 }
 
 // 卖出款按跳数交收：到期后自动回到可用资金
+const settleTicks = () => Math.max(1, Math.min(24, Number(mkt && mkt.settle) || SETTLE_TICKS));
+
 async function settleUp() {
   if (!mkt || !acc || !acc.pending) return;
   const got = releasePending(acc, mkt.tick || 0);
@@ -811,7 +822,8 @@ function renderPending() {
   const due = Math.min(...pend.map(p => Number(p.due) || 0));
   const left = Math.max(0, due - tick);
   const since = mkt && mkt.steppedAt ? Date.now() - mkt.steppedAt : 0;
-  const ms = Math.max(0, left * sp - since);
+  const toNext = Math.max(0, sp - since);
+  const ms = left <= 0 ? 0 : (left - 1) * sp + toNext;
   const sec = Math.ceil(ms / 1000);
   el.textContent = money(pendingTotal(acc)) + (left > 0 ? ` \u00b7 ${sec} \u79d2\u540e\u5230\u8d26` : " \u00b7 \u5230\u8d26\u4e2d");
 }
@@ -932,6 +944,7 @@ function calc() {
   const im = st ? impactOf(shares, st) : 0;
   const amount = st ? shares * st.price : 0;
   $("#cAmount").textContent = money(amount);
+  const fh = $("#fhintSettle"); if (fh) fh.textContent = "\u5356\u51fa\u540e " + settleTicks() + " \u8df3\u5230\u8d26";
   const liq = $("#pLiq");
   if (liq) {
     const hold = Math.abs((acc.positions[pid] || {}).shares || 0);
@@ -1209,19 +1222,28 @@ async function trade(action) {
     if (!pos || pos.shares < shares) return toast("手上没有这么多股。");
     const net = amount - fee;
     acc.pending = acc.pending || [];
-    acc.pending.push({ amt: net, due: (mkt.tick || 0) + SETTLE_TICKS });
-    acc.realized += (st.price - pos.cost) * shares - fee;
+    acc.pending.push({ amt: net, due: (mkt.tick || 0) + settleTicks() });
+    acc.realized += (sellPx - pos.cost) * shares - fee;
     pos.shares -= shares;
     if (pos.shares === 0) delete acc.positions[pid];
     await saveAcc(); render(); refreshHeld();
     await noteFlow(-shares * (1 + im * 3));
-    SFX.sell(); return toast("卖出 " + shares + " 股 · " + money(net) + " 金 " + SETTLE_TICKS + " 跳后到账");
+    SFX.sell(); return toast("卖出 " + shares + " 股 · " + money(net) + " 金 " + settleTicks() + " 跳后到账");
   }
 
   if (action === "short") {
     if (pos && pos.shares > 0) return toast("多头仓位还在，先卖出再开空。");
     const cap = Math.round((Number(st.float) || 20000) * 0.2);
-    const curShort = Object.values(acc.positions).reduce((n, p) => n + (p && p.shares < 0 ? -p.shares : 0), 0);
+    let curShort = Object.values(acc.positions).reduce((n, p) => n + (p && p.shares < 0 ? -p.shares : 0), 0);
+    if (!DEMO) {
+      // 券源上限按全桌统计，不是每个人各自 20%
+      try {
+        const md = await OBR.room.getMetadata();
+        const all = md[ACC_KEY] || {};
+        curShort = Object.values(all.players || {}).reduce((n, a) =>
+          n + Object.values((a && a.positions) || {}).reduce((m, q) => m + (q && q.shares < 0 ? -q.shares : 0), 0), 0);
+      } catch (e) {}
+    }
     if (curShort + shares > cap) return toast("这只股票能借到的券只有 " + cap + " 股（流通盘 20%），你已经借了 " + curShort + " 股。");
     const margin = amount * SHORT_MARGIN;
     if (margin > free) return toast("保证金不够：需要 " + money(margin) + "，可用 " + money(Math.max(0, free)) + "。");
@@ -1276,11 +1298,12 @@ async function closeAll() {
   const st = mkt.stocks[pid];
   if (st.halt) return toast("停牌中，平不掉。");
   const n = Math.abs(pos.shares);
-  const amount = n * st.price, fee = feeOf(amount);
-  const pnl = pos.shares > 0 ? (st.price - pos.cost) * n - fee : (pos.cost - st.price) * n - fee;
+  const px = execPrice(st, n, pos.shares > 0 ? -1 : +1);
+  const amount = n * px, fee = feeOf(amount);
+  const pnl = pos.shares > 0 ? (px - pos.cost) * n - fee : (pos.cost - px) * n - fee;
   if (pos.shares > 0) {
     acc.pending = acc.pending || [];
-    acc.pending.push({ amt: amount - fee, due: (mkt.tick || 0) + SETTLE_TICKS });
+    acc.pending.push({ amt: amount - fee, due: (mkt.tick || 0) + settleTicks() });
   } else {
     acc.cash -= amount + fee;
   }
@@ -1288,7 +1311,7 @@ async function closeAll() {
   delete acc.positions[pid];
   await saveAcc(); render(); refreshHeld();
   await noteFlow(pos.shares > 0 ? -n : n);
-  if (pos && pos.shares > 0) SFX.sell(); else SFX.cover(); toast((pos.shares > 0 ? "已卖出，钱 " + SETTLE_TICKS + " 跳后到账" : "已平空") + " · 佣金 " + money(fee));
+  if (pos && pos.shares > 0) SFX.sell(); else SFX.cover(); toast((pos.shares > 0 ? "已卖出，钱 " + settleTicks() + " 跳后到账" : "已平空") + " · 佣金 " + money(fee));
 }
 
 /* ---------- GM ---------- */
@@ -1308,6 +1331,9 @@ function gmSync() {
   $("#gmRunState").textContent = run ? "每 " + (sp / 1000) + " 秒一跳" : "已冻结";
   document.querySelectorAll("[data-speed]").forEach(b =>
     b.classList.toggle("on", Number(b.dataset.speed) === sp));
+  const stl = Math.max(1, Number(mkt.settle) || SETTLE_TICKS);
+  document.querySelectorAll("[data-settle]").forEach(b =>
+    b.classList.toggle("on", Number(b.dataset.settle) === stl));
   if (document.activeElement !== $("#gmSpeed")) $("#gmSpeed").value = String(sp / 1000);
   document.querySelectorAll("[data-vol]").forEach(b =>
     b.classList.toggle("on", Math.abs(Number(b.dataset.vol) - (mkt.vol || 1)) < 0.01));
@@ -1582,6 +1608,12 @@ async function setSpeed(ms) {
 document.querySelectorAll("[data-speed]").forEach(b => {
   b.onclick = () => setSpeed(Number(b.dataset.speed));
 });
+document.querySelectorAll("[data-settle]").forEach(b => b.onclick = async () => {
+  const v = Number(b.dataset.settle) || SETTLE_TICKS;
+  await applyMarket(m => { m.settle = v; return m; });
+  gmSync(); render();
+  toast("交收改为 " + v + " 跳后到账。");
+});
 $("#gmSpeedGo").onclick = () => setSpeed((Number($("#gmSpeed").value) || 5) * 1000);
 document.querySelectorAll("[data-vol]").forEach(b => {
   b.onclick = () => applyMarket(m => { m.vol = Number(b.dataset.vol); return m; });
@@ -1639,6 +1671,12 @@ async function gmSweepMargins(silent) {
   return out;
 }
 $("#gmMargin").onclick = () => gmSweepMargins(false);
+$("#gmSettleAll").onclick = async () => {
+  const got = await settleAll();
+  await settleUp();
+  if (isGM) gmSync();
+  toast(got > 0 ? "已结清全桌待交收 " + money(got) : "没有到期的待交收。");
+};
 
 $("#gmResetMkt").onclick = () => arm($("#gmResetMkt"), async () => {
   const sp = mkt?.speed ?? TICK_MS, vol = mkt?.vol ?? 1;
@@ -1648,6 +1686,8 @@ $("#gmResetMkt").onclick = () => arm($("#gmResetMkt"), async () => {
     const m = newMarket();
     m.tick = tk;
     m.speed = clampSpeed(sp); m.vol = vol; m.limit = lim; m.autoNews = an;
+    m.settle = settleTicks();
+    m.barSec = Number(mkt && mkt.barSec) || DEFAULT_BAR_SEC;
     m.lastBy = "重置";
     m.steppedAt = Date.now();
     return m;
@@ -1855,11 +1895,13 @@ async function connect() {
   if (isGM) { gmSync(); refreshPlayers(); }
 
   OBR.room.onMetadataChange(md => {
-    if (hasStocks(md[MKT_KEY])) { mkt = md[MKT_KEY]; noteBuf(mkt); render(); if (isGM) gmSync(); updateDriver(); checkMargin(); settleUp(); }
+    if (hasStocks(md[MKT_KEY])) { mkt = md[MKT_KEY]; noteBuf(mkt); render(); if (isGM) gmSync(); updateDriver(); checkMargin(); }
     if (md[ACC_KEY] && md[ACC_KEY].players?.[accPid()]) {
       const mine = cleanAcc(md[ACC_KEY].players[accPid()]);
       if (JSON.stringify(mine) !== JSON.stringify(acc)) { acc = mine; render(); refreshHeld(); }
     }
+    // 先把账户读成最新，再结算，避免用旧快照覆盖已到账的现金
+    settleUp().catch(() => {});
   });
   // 有人进出房间时刷新 GM 面板里的玩家列表
   OBR.party.onChange(() => { refreshHeld(); if (isGM) refreshPlayers(); });
@@ -1873,6 +1915,7 @@ async function connect() {
     if (!beat) return;
     const idle = Date.now() - (mkt.steppedAt || 0);
     beat.textContent = mkt.steppedAt ? `· 最后推进 ${Math.max(0, Math.round(idle / 1000))} 秒前（${mkt.lastBy || "未知"}）` : "";
+    if (acc && acc.pending && acc.pending.length) settleUp().catch(() => {});
   }, 1000);
 
   toast("已连上 Owlbear，行情由你的面板推进（关掉面板后由后台接手）。");
