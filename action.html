@@ -97,6 +97,14 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
 .evrow{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:10px;font-size:11.5px;min-height:32px;
   background:#f4f7f5;border:1px solid #e4ebe7;color:#5d6f66}
 .evrow[hidden]{display:none}
+.ghostbtn{margin-top:8px;width:100%;padding:7px;border:1px dashed #cbbf9f;border-radius:9px;background:#fbf8ef;color:#8a6f3d;font:600 11px/1.2 inherit;cursor:pointer}
+.ghostbtn:hover{background:#f6f0dd}
+#ledgerBody{max-height:52vh;overflow:auto;margin-top:10px}
+.lgtbl{width:100%;border-collapse:collapse;font-size:11px}
+.lgtbl th{position:sticky;top:0;background:#faf6ea;color:#9a7f4b;font-weight:600;text-align:left;padding:5px 6px;border-bottom:1px solid #e7dcc3}
+.lgtbl td{padding:4px 6px;border-bottom:1px solid #f2ebda;color:#4a5a52;white-space:nowrap}
+.lgtbl .up{color:#c9432f}.lgtbl .dn{color:#12855c}
+.lgsum{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:#6b7a72;margin-top:8px}
 .circuit{display:flex;align-items:center;gap:6px;margin:8px 0 0;padding:8px 12px;border-radius:10px;background:linear-gradient(90deg,#7a1f1a,#b3342a);color:#fff;font-size:12px;font-weight:700;letter-spacing:.3px}
 .circuit[hidden]{display:none}
 .evrow .evtag{font-size:9.5px;font-weight:700;color:#fff;background:#9aa8a1;border-radius:4px;padding:1px 6px;flex:none}
@@ -216,7 +224,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
       <span id="actBadge" class="cnt" hidden></span>
-    <span class="ver">v3.15.0</span>
+    <span class="ver">v3.16.0</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -327,6 +335,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
           <div class="posline"><span>流动性</span><span id="pLiq">—</span></div>
           <div class="posline"><span>最近成交</span><span id="pLog" style="font-size:11px;text-align:right">—</span></div>
           <button class="closebtn" id="btnClose" disabled>清仓</button>
+          <button class="ghostbtn" id="btnLedger">账本 · 全部成交记录</button>
           <div class="fhint"><span id="fhintSettle">卖出后 3 跳到账</span>，待交收处显示倒计时。买跌（融券）押 50% 押金，亏光押金自动平仓。</div>
         </section>
         <section class="card tipcard">
@@ -489,6 +498,20 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
   </div>
 </div>
 
+<div class="mask" id="ledgerMask">
+  <div class="sheet" style="width:760px">
+    <div style="display:flex;align-items:center;justify-content:space-between;gap:10px">
+      <h3>成交账本</h3>
+      <div style="display:flex;gap:8px">
+        <button class="btn" id="ledgerCsv">导出 CSV</button>
+        <button class="btn dark" id="ledgerClose">关闭</button>
+      </div>
+    </div>
+    <div class="shint" id="ledgerSum" style="margin-top:6px"></div>
+    <div id="ledgerBody"></div>
+  </div>
+</div>
+<button class="ghostbtn" id="btnLedger2" hidden></button>
 <div id="toast"></div>
 
 <!-- 关键：SDK 必须静态 import。OBR 在 iframe 的 load 事件里发 OBR_READY，
@@ -817,8 +840,18 @@ async function setBalance(playerId, cash) {  if (DEMO) {
 }
 
 /* ---------- 渲染 ---------- */
-function logTrade(side, id, sh, px, fee) {
-  acc.log = (acc.log || []).concat([{ t: (mkt && mkt.tick) || 0, s: side, id, sh, px: Number(px.toFixed(2)), f: Number(fee.toFixed(2)) }]).slice(-20);
+const LEDGER_KEY = "gx-ledger-v1";
+function readLedger() {
+  try { const a = JSON.parse(localStorage.getItem(LEDGER_KEY) || "[]"); return Array.isArray(a) ? a : []; } catch (e) { return []; }
+}
+function writeLedger(a) { try { localStorage.setItem(LEDGER_KEY, JSON.stringify(a.slice(-500))); } catch (e) {} }
+function logTrade(side, id, sh, px, fee, pnl) {
+  const t = (mkt && mkt.tick) || 0;
+  acc.log = (acc.log || []).concat([{ t, s: side, id, sh, px: Number(px.toFixed(2)), f: Number(fee.toFixed(2)) }]).slice(-20);
+  const nm = (stockById(id) || {}).name || id;
+  const rows = readLedger();
+  rows.push({ at: Date.now(), t, s: side, id, n: nm, sh, px: Number(px.toFixed(2)), f: Number(fee.toFixed(2)), pnl: Number.isFinite(pnl) ? Number(pnl.toFixed(2)) : null, cash: Number(acc.cash.toFixed(2)) });
+  writeLedger(rows);
 }
 function renderPending() {
   const el = $("#pPending"); if (!el) return;
@@ -1208,6 +1241,7 @@ async function noteFlow(delta) {
 }
 
 async function trade(action) {
+  if ((Number(mkt.circuitUntil) || 0) > (mkt.tick || 0)) return toast("熔断中，交易所暂停交易，等复牌。");
   const st = mkt.stocks[pid], s = stockById(pid);
   if (st.halt) return toast("停牌中，等城主复牌。");
   const shares = normalizeShares($("#qty").value);
@@ -1245,7 +1279,7 @@ async function trade(action) {
     if (pos.shares === 0) delete acc.positions[pid];
     await saveAcc(); render(); refreshHeld();
     await noteFlow(-shares * (1 + im * 3));
-    logTrade("卖", pid, shares, sellPx, fee); await saveAcc(); render();
+    logTrade("卖", pid, shares, sellPx, fee, (sellPx - pos.cost) * shares - fee); await saveAcc(); render();
   SFX.sell(); return toast("卖出 " + shares + " 股 · " + money(net) + " 金 " + Math.round(waitMs / 1000) + " 秒后到账");
   }
 
@@ -1286,7 +1320,7 @@ async function trade(action) {
   if (pos.shares === 0) delete acc.positions[pid];
   await saveAcc(); render(); refreshHeld();
   await noteFlow(shares);
-  logTrade("平空", pid, shares, buyPx, fee); await saveAcc(); render();
+  logTrade("平空", pid, shares, buyPx, fee, pnl); await saveAcc(); render();
   SFX.cover(); toast("平空 " + shares + " 股 · " + (pnl >= 0 ? "赚 " : "亏 ") + money(Math.abs(pnl)));
 }
 
@@ -1313,6 +1347,7 @@ async function checkMargin() {
 }
 
 async function closeAll() {
+  if ((Number(mkt.circuitUntil) || 0) > (mkt.tick || 0)) return toast("熔断中，交易所暂停交易。");
   const pos = acc.positions[pid];
   if (!pos) return;
   const st = mkt.stocks[pid];
@@ -1758,6 +1793,48 @@ function snapInfo() {
     el.textContent = s ? "已保存：" + new Date(s.at).toLocaleString() : "未保存（存在本机浏览器）";
   } catch (e) { el.textContent = "未保存"; }
 }
+function fmtTime(ms) {
+  const d = new Date(ms);
+  const p = n => String(n).padStart(2, "0");
+  return (d.getMonth() + 1) + "/" + d.getDate() + " " + p(d.getHours()) + ":" + p(d.getMinutes()) + ":" + p(d.getSeconds());
+}
+function renderLedger() {
+  const rows = readLedger().slice().reverse();
+  const body = $("#ledgerBody");
+  if (!rows.length) {
+    body.innerHTML = '<div class="shint" style="padding:18px 4px">还没有成交记录。买一笔就有了。</div>';
+    $("#ledgerSum").textContent = "";
+    return;
+  }
+  let buy = 0, sell = 0, fee = 0, pnl = 0, wins = 0, losses = 0;
+  for (const r of rows) {
+    fee += r.f || 0;
+    if (r.s === "买") buy += r.sh * r.px;
+    else if (r.s === "卖") sell += r.sh * r.px;
+    else if (r.s === "空") sell += r.sh * r.px;
+    else if (r.s === "平空" || r.s === "清仓") buy += r.sh * r.px;
+    if (r.pnl != null) { pnl += r.pnl; if (r.pnl >= 0) wins++; else losses++; }
+  }
+  const total = buy + sell;
+  $("#ledgerSum").textContent = "共 " + rows.length + " 笔 · 买入 " + money(buy) + " · 卖出 " + money(sell) + " · 手续费 " + money(fee) + " · 已实现 " + (pnl >= 0 ? "+" : "") + money(pnl) + " · 盈 " + wins + " / 亏 " + losses;
+  body.innerHTML = '<table class="lgtbl"><thead><tr><th>时间</th><th>跳</th><th>方向</th><th>股票</th><th style="text-align:right">股数</th><th style="text-align:right">价格</th><th style="text-align:right">手续费</th><th style="text-align:right">盈亏</th><th style="text-align:right">余额</th></tr></thead><tbody>' +
+    rows.map(r => '<tr><td>' + fmtTime(r.at) + '</td><td>' + (r.t || 0) + '</td><td>' + r.s + '</td><td>' + r.n + '</td><td style="text-align:right">' + r.sh + '</td><td style="text-align:right">' + r.px.toFixed(2) + '</td><td style="text-align:right">' + (r.f || 0).toFixed(2) + '</td><td style="text-align:right" class="' + (r.pnl == null ? "" : r.pnl >= 0 ? "dn" : "up") + '">' + (r.pnl == null ? "—" : (r.pnl >= 0 ? "+" : "") + r.pnl.toFixed(2)) + '</td><td style="text-align:right">' + (r.cash == null ? "—" : r.cash.toFixed(2)) + '</td></tr>').join("") +
+    '</tbody></table>';
+}
+function openLedger() { renderLedger(); $("#ledgerMask").classList.add("on"); SFX.tick(); }
+$("#btnLedger").onclick = openLedger;
+$("#ledgerClose").onclick = () => $("#ledgerMask").classList.remove("on");
+$("#ledgerMask").addEventListener("click", e => { if (e.target.id === "ledgerMask") $("#ledgerMask").classList.remove("on"); });
+$("#ledgerCsv").onclick = () => {
+  const rows = readLedger();
+  if (!rows.length) return toast("还没有可导出的成交。");
+  const head = ["时间", "跳", "方向", "股票", "股数", "价格", "手续费", "盈亏", "余额"];
+  const lines = [head.join(",")].concat(rows.map(r => [fmtTime(r.at), r.t || 0, r.s, r.n, r.sh, r.px.toFixed(2), (r.f || 0).toFixed(2), r.pnl == null ? "" : r.pnl.toFixed(2), r.cash == null ? "" : r.cash.toFixed(2)].join(",")));
+  const blob = new Blob(["\ufeff" + lines.join("\n")], { type: "text/csv;charset=utf-8" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob); a.download = "金手指交易账本.csv"; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+};
 $("#gmSnap").onclick = async () => {
   if (DEMO) {
     localStorage.setItem(SNAP_KEY, JSON.stringify({ at: Date.now(), market: mkt, accounts: null }));
