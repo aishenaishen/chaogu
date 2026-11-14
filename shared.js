@@ -18,7 +18,9 @@ export const MAX_BARS = 60;       // 保留 K 线根数（可左右回看）
 export const FEE_RATE = 0.01;     // 佣金 1%（费伦的钱庄抽得狠）
 export const FEE_MIN = 0.1;       // 最低佣金 1 银
 export const LOT = 10;            // 一手 10 股（费伦的钱小，一手别太贵）
-export const LIMIT = 0.10;        // 涨跌停 ±10%
+export const LIMIT = 0.10;
+export const MARKET_DRIFT = 0.00012;   // 基准上漂：每跳约 +0.012%，一天约 +5.6%
+export const SHORT_FEE_DAILY = 0.012;  // 融券日费：按开仓名义额每天 1.2%        // 涨跌停 ±10%
 export const TICKS_PER_DAY = 480; // 一天 480 跳
 export const SETTLE_TICKS = 3;    // 卖出后 6 跳（一根 K）才交收
 export const CROWD_NEUTRAL = 50;  // 拥挤度中性值
@@ -664,13 +666,13 @@ export function stepMarket(m) {
     const trustK = Number.isFinite(Number(st.trustK)) ? Number(st.trustK) : TRUST_TIERS.heavy.k;
     const trustCeil = Number.isFinite(Number(st.trustCeil)) ? Number(st.trustCeil) : 50;
     const trustTarget = Math.min(50, trustCeil);
-    const trustPush = ((trust - 50) / 50) * 0.0005;   // 信誉差 → 长期阴跌；信誉好 → 长期溢价
+    const trustPush = Math.max(-0.0002, Math.min(0.0002, ((trust - 50) / 50) * 0.0005));   // 信誉差 → 长期阴跌；信誉好 → 长期溢价
     const trustVol = 1 + Math.max(0, 50 - trust) / 120; // 不被信任的股票更容易暴涨暴跌
-    let ret = s.vol * volMul * volBoost * trustVol * gauss() + s.drift + crowdPush + trustPush + (driftN[s.id] || 0);
+    let ret = s.vol * volMul * volBoost * trustVol * gauss() + s.drift + MARKET_DRIFT + crowdPush + trustPush + (driftN[s.id] || 0);
     // 信誉会缓慢回归中性：每天（480 跳）约回 4 点，所以一次丑闻要养好几天
     trust = Math.max(0, Math.min(100, trust + (trustTarget - trust) * trustK));
     // 拥挤到 75 以上再遇到下跌：踩踏，跌幅放大
-    if (crowd > 75 && ret < 0) ret *= 1.35;
+    if (crowd > 75) ret *= ret > 0 ? 1.15 : 1.35;
     // 冷盘（没人接盘）遇到下跌，crowd < 30 时越跌越猛
     if (crowd < 30 && ret < -0.002) ret *= 1.6;
     const free = driftF[s.id] || 0;   // 城主事件：黑天鹅，不封板
@@ -686,7 +688,7 @@ export function stepMarket(m) {
 
     // 每 TICKS_PER_DAY 跳滚动一次昨收，涨跌停重新计算
     const newDay = tick % TICKS_PER_DAY === 0;
-    const vol = Math.max(1, Math.round((s.float || 100000) / 200 * (0.4 + Math.random() * 1.2)));
+    const vol = Math.max(1, Math.round((fl0 || s.float || 100000) / 200 * (0.4 + Math.random() * 1.2)));
     let cur = { ...st.cur };
     cur.c = price;
     cur.h = Math.max(Number(cur.h) || price, price);
@@ -731,7 +733,7 @@ export function stepMarket(m) {
     const q = stocks[x.id];
     if (!q || !(q.prevClose > 0)) return false;
     const chg = q.price / q.prevClose - 1;
-    const hit = chg <= -0.07;
+    const hit = chg <= -0.09;
     if (hit && !q.crashMark) { q.crashMark = true; return true; }
     if (!hit && chg > -0.05) q.crashMark = false;   // 回血到 -5% 以上，下次还能再触发
     return false;
@@ -744,7 +746,7 @@ export function stepMarket(m) {
         // 跌破 7% 的自己：恐慌抛售，拥拤直接掉一截
         q.crowd = Math.max(0, Number(q.crowd) - 12);
       } else {
-        q.crowd = Math.max(0, Number(q.crowd) - 2 * crashed.length);
+        q.crowd = Math.max(0, Number(q.crowd) - 1.5 * crashed.length);
         if (Number.isFinite(Number(q.trust))) q.trust = Math.max(0, Number(q.trust) - 0.5 * crashed.length);
       }
     }
@@ -756,6 +758,7 @@ export function stepMarket(m) {
   let newsOut = news, newsLeftOut = newsLeft;
   const idxChg = idxNow / (Number(m.indexPrev) || Number(m.index) || idxNow) - 1;
   let armed = m.circuitArmed !== false;
+  if (tick % TICKS_PER_DAY === 0) armed = true;
   if (idxChg > -0.05) armed = true;
   if (idxChg <= -0.08 && circuitUntil <= tick && armed) {
     armed = false;
@@ -769,7 +772,7 @@ export function stepMarket(m) {
     autoNews: m.autoNews !== false, speed: clampSpeed(m.speed),
     limit: m.limit !== false, settleSec: Number(m.settleSec) || 10, circuitUntil: Number(m.circuitUntil) || 0,
     news: newsOut, newsLeft: newsLeftOut, events, history, stocks, steppedAt: Date.now(), circuitUntil, circuitArmed: armed,
-    indexPrev: m.indexPrev ?? m.index ?? 1000
+    indexPrev: (tick % TICKS_PER_DAY === 0) ? idxNow : (m.indexPrev ?? m.index ?? 1000)
   };
   out.index = indexOf(out);
   return out;
@@ -863,6 +866,15 @@ export function marginUsed(acc) {
 
 export function shortLoss(pos, price) {
   return pos && pos.shares < 0 ? (price - pos.cost) * (-pos.shares) : 0;
+}
+
+// 融券日费：按开仓名义额计息，持有按跳数折算（480 跳 = 1 天）
+export function shortFee(pos, tick) {
+  const shares = pos && pos.shares < 0 ? -pos.shares : 0;
+  if (!shares) return 0;
+  const open = Number.isFinite(Number(pos.openTick)) ? Number(pos.openTick) : tick;
+  const days = Math.max(0, (Number(tick) || 0) - open) / TICKS_PER_DAY;
+  return shares * Number(pos.cost || 0) * SHORT_FEE_DAILY * days;
 }
 
 export function needsCover(pos, price) {

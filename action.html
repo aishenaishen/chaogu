@@ -224,7 +224,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
       <span id="actBadge" class="cnt" hidden></span>
-    <span class="ver">v3.16.1</span>
+    <span class="ver">v3.17.0</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -336,7 +336,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
           <div class="posline"><span>最近成交</span><span id="pLog" style="font-size:11px;text-align:right">—</span></div>
           <button class="closebtn" id="btnClose" disabled>清仓</button>
           <button class="ghostbtn" id="btnLedger">账本 · 全部成交记录</button>
-          <div class="fhint"><span id="fhintSettle">卖出后 3 跳到账</span>，待交收处显示倒计时。买跌（融券）押 50% 押金，亏光押金自动平仓。</div>
+          <div class="fhint"><span id="fhintSettle">卖出后 3 跳到账</span>，待交收处显示倒计时。买跌（融券）押 50% 押金，按名义额每天 1.2% 借券费，亏光押金自动平仓。</div>
         </section>
         <section class="card tipcard">
           <div class="tipt">老雅诺的规矩</div>
@@ -487,7 +487,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <h3>怎么玩</h3>
     <div class="sub">深水城六方产业在交易所挂牌，红涨绿跌，涨跌停 ±10%。</div>
     <div class="srow"><label>玩家</label><span class="shint">左侧选股票 → 右侧填股数（1 手 = 10 股）→ 买入 / 卖出。T+1：卖出后 6 跳钱才到账。佣金 1%，最低 1 银。</span></div>
-    <div class="srow"><label></label><span class="shint">看跌就「买跌」：押 50% 押金，跌了赚、涨了亏，押金亏光自动平仓。</span></div>
+    <div class="srow"><label></label><span class="shint">看跌就「买跌」：押 50% 押金，跌了赚、涨了亏；每天 1.2% 借券费，押金亏光自动平仓。</span></div>
     <div class="srow"><label></label><span class="shint">账户里的钱由城主发放。亏了不是爆仓，是欠了城里某位债主的钱。</span></div>
     <div class="sep"></div>
     <div class="srow"><label>城主</label><span class="shint">点右上「GM 控制台」：发钱、暂停行情、拉砸个股、投放事件。事件会显示在玩家面板的黄色条里。</span></div>
@@ -525,7 +525,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
 import {
   MKT_KEY, ACC_KEY, TICK_MS, STOCKS, stockById, fmt, PRESETS, clampSpeed,
   newMarket, stepMarket, newAccount, equityOf, positionValue, unrealizedOf, feeOf, indexOf, LOT, TRUST_TIERS, trustTier, BAR_SEC_CHOICES, DEFAULT_BAR_SEC,
-  SHORT_MARGIN, marginUsed, needsCover, shortLoss,
+  SHORT_MARGIN, SHORT_FEE_DAILY, marginUsed, needsCover, shortLoss, shortFee,
   SETTLE_TICKS, releasePending, pendingTotal, addCrowd, clampCrowd, CROWD_NEUTRAL, settleDelayMs, SETTLE_BASE_MS,
   SEC_PER_TICK, MAX_BARS
 } from "./shared.js";
@@ -911,7 +911,7 @@ function render() {
   const pos = acc.positions[pid];
   const short = !!pos && pos.shares < 0;
   $("#pLine").innerHTML = pos
-    ? `<b>${pos.shares}</b> 股 · 成本 <b>${fmt(pos.cost, s.dp)}</b>` + (short ? ` · 押金 <b>${money((-pos.shares) * pos.cost * SHORT_MARGIN)}</b>` : "")
+    ? `<b>${pos.shares}</b> 股 · 成本 <b>${fmt(pos.cost, s.dp)}</b>` + (short ? ` · 押金 <b>${money((-pos.shares) * pos.cost * SHORT_MARGIN)}</b> · 日费 ${(SHORT_FEE_DAILY * 100).toFixed(1)}%` : "")
     : `<b>0</b> 股 · 成本 <b>—</b>`;
   renderPending();
   $("#cCrowd").textContent = crowdLabel(st.crowd);
@@ -1300,9 +1300,11 @@ async function trade(action) {
     const margin = amount * SHORT_MARGIN;
     if (margin > free) return toast("保证金不够：需要 " + money(margin) + "，可用 " + money(Math.max(0, free)) + "。");
     acc.cash += amount - fee;
+    const flat = !pos || pos.shares === 0;
     const p = pos || { shares: 0, cost: 0 };
     p.cost = (p.cost * (-p.shares) + amount) / (-p.shares + shares);
     p.shares -= shares;
+    if (flat) p.openTick = mkt.tick || 0;
     acc.positions[pid] = p;
     await saveAcc(); render(); refreshHeld();
     await noteFlow(-shares * (1 + im * 3));
@@ -1313,8 +1315,9 @@ async function trade(action) {
   // cover：买回空单
   if (!pos || pos.shares > -shares) return toast("空单没有这么多股。");
   if (amount + fee > acc.cash) return toast("可用资金不够回补（含佣金 " + money(fee) + "）。");
-  const pnl = (pos.cost - buyPx) * shares - fee;
-  acc.cash -= amount + fee;
+  const sFee = shortFee({ shares: -shares, cost: pos.cost, openTick: pos.openTick }, mkt.tick);
+  const pnl = (pos.cost - buyPx) * shares - fee - sFee;
+  acc.cash -= amount + fee + sFee;
   acc.realized += pnl;
   pos.shares += shares;
   if (pos.shares === 0) delete acc.positions[pid];
@@ -1334,8 +1337,9 @@ async function checkMargin() {
     const st = mkt.stocks[id];
     if (!st || st.halt || !needsCover(pos, st.price)) continue;
     const n = -pos.shares, amount = n * st.price, fee = feeOf(amount);
-    const pnl = (pos.cost - st.price) * n - fee;
-    acc.cash -= amount + fee;
+    const sFee = shortFee({ shares: -n, cost: pos.cost, openTick: pos.openTick }, mkt.tick);
+    const pnl = (pos.cost - st.price) * n - fee - sFee;
+    acc.cash -= amount + fee + sFee;
     acc.realized += pnl;
     delete acc.positions[id];
     changed = true;
@@ -1355,7 +1359,8 @@ async function closeAll() {
   const n = Math.abs(pos.shares);
   const px = execPrice(st, n, pos.shares > 0 ? -1 : +1);
   const amount = n * px, fee = feeOf(amount);
-  const pnl = pos.shares > 0 ? (px - pos.cost) * n - fee : (pos.cost - px) * n - fee;
+  const sFee = pos.shares < 0 ? shortFee({ shares: -n, cost: pos.cost, openTick: pos.openTick }, mkt.tick) : 0;
+  const pnl = pos.shares > 0 ? (px - pos.cost) * n - fee : (pos.cost - px) * n - fee - sFee;
   if (pos.shares > 0) {
     acc.pending = acc.pending || [];
     const waitMs2 = settleDelayMs(st, mkt);
@@ -1711,8 +1716,9 @@ function sweepPlayer(a, m) {
     if (!p || p.shares >= 0 || !st) continue;
     if (!needsCover(p, st.price)) continue;
     const shares = -p.shares, amount = shares * st.price, fee = feeOf(amount);
-    a.cash = (Number(a.cash) || 0) - amount - fee;
-    a.realized = (Number(a.realized) || 0) + (shares * (p.cost - st.price) - fee);
+    const sFee = shortFee(p, m.tick);
+    a.cash = (Number(a.cash) || 0) - amount - fee - sFee;
+    a.realized = (Number(a.realized) || 0) + (shares * (p.cost - st.price) - fee - sFee);
     delete a.positions[id];
     notes.push({ id, shares, price: st.price });
   }
