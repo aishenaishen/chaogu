@@ -557,14 +557,15 @@ const logDrift = (pct, total) => {
 
 export function indexOf(m) {
   if (!m || !m.stocks) return 1000;
-  let sum = 0, n = 0;
+  let sum = 0, wsum = 0;
   for (const s of STOCKS) {
     const st = m.stocks[s.id];
     if (!st) continue;
-    sum += (st.price / s.p0) * 1000;
-    n++;
+    const w = Number(st.float) > 0 ? Number(st.float) : s.float;
+    sum += (st.price / s.p0) * w;
+    wsum += w;
   }
-  return n ? Math.round(sum / n * 100) / 100 : 1000;
+  return wsum ? Math.round(sum / wsum * 100000) / 100 : 1000;
 }
 
 export function newMarket() {
@@ -580,7 +581,7 @@ export function newMarket() {
     prevClose[s.id] = q;
   }
   const m = {
-    v: 5, econ: 27, barSec: DEFAULT_BAR_SEC, tick: 0, running: true, vol: 1, autoNews: true, speed: TICK_MS, limit: true,
+    v: 5, econ: 27, barSec: DEFAULT_BAR_SEC, settleSec: 10, circuitUntil: 0, circuitArmed: true, tick: 0, running: true, vol: 1, autoNews: true, speed: TICK_MS, limit: true,
     news: "", newsLeft: 0, events: [], stocks, steppedAt: Date.now()
   };
   m.index = indexOf(m); m.indexPrev = m.index;
@@ -590,6 +591,14 @@ export function newMarket() {
 export function stepMarket(m) {
   const tick = (m.tick || 0) + 1;
   const volMul = Number.isFinite(Number(m.vol)) ? Number(m.vol) : 1;
+
+  // 熔断中：价格冻结、事件不倒计时，只推进 tick
+  if (Number(m.circuitUntil) > tick) {
+    return {
+      ...m, tick, stocks: m.stocks, steppedAt: Date.now(),
+      index: m.index, indexPrev: m.indexPrev
+    };
+  }
 
   // 事件：总冲击按持续跳数摊平，逐跳施加
   // free=true 的是城主投放的事件：不受涨跌停限制（黑天鹅）；随机快讯照常受限
@@ -662,6 +671,8 @@ export function stepMarket(m) {
     trust = Math.max(0, Math.min(100, trust + (trustTarget - trust) * trustK));
     // 拥挤到 75 以上再遇到下跌：踩踏，跌幅放大
     if (crowd > 75 && ret < 0) ret *= 1.35;
+    // 冷盘（没人接盘）遇到下跌，crowd < 30 时越跌越猛
+    if (crowd < 30 && ret < -0.002) ret *= 1.6;
     const free = driftF[s.id] || 0;   // 城主事件：黑天鹅，不封板
     let price = st.price * Math.exp(ret + free);
     if (m.limit !== false && !free) {
@@ -692,7 +703,7 @@ export function stepMarket(m) {
       bt -= barSec;
     }
     const fl = Number(st.float) > 0 ? Number(st.float) : s.float;
-    stocks[s.id] = { price, prevClose: newDay ? price : st.prevClose, halt: false, crowd, flow: 0, float: fl, trust, trustK, trustCeil, cur, bars, bt };
+    stocks[s.id] = { price, prevClose: newDay ? price : st.prevClose, halt: false, crowd, flow: 0, float: fl, trust, trustK, trustCeil, cur, bars, bt, crashMark: !!st.crashMark };
   }
 
   // 事件回溯：城主事件走完时，记下持续跳数和各股票的实际涨跌
@@ -715,11 +726,49 @@ export function stepMarket(m) {
   // 不按条数砍，按字节砍：历史最多占 7kB，剩下的留给行情和账户
   while (history.length > 60 || JSON.stringify(history).length > 3500) history.shift();
 
+  // 股灾传染：只在「刚跌破 7%」那一跳触发，避免每跳重复扣拥拤
+  const crashed = STOCKS.filter(x => {
+    const q = stocks[x.id];
+    if (!q || !(q.prevClose > 0)) return false;
+    const chg = q.price / q.prevClose - 1;
+    const hit = chg <= -0.07;
+    if (hit && !q.crashMark) { q.crashMark = true; return true; }
+    if (!hit && chg > -0.05) q.crashMark = false;   // 回血到 -5% 以上，下次还能再触发
+    return false;
+  });
+  if (crashed.length) {
+    for (const x of STOCKS) {
+      const q = stocks[x.id];
+      if (!q) continue;
+      if (crashed.some(c => c.id === x.id)) {
+        // 跌破 7% 的自己：恐慌抛售，拥拤直接掉一截
+        q.crowd = Math.max(0, Number(q.crowd) - 12);
+      } else {
+        q.crowd = Math.max(0, Number(q.crowd) - 2 * crashed.length);
+        if (Number.isFinite(Number(q.trust))) q.trust = Math.max(0, Number(q.trust) - 0.5 * crashed.length);
+      }
+    }
+  }
+
+  // 指数单日跌到 -8%：熔断 10 跳
+  const idxNow = indexOf({ stocks });
+  let circuitUntil = Number(m.circuitUntil) || 0;
+  let newsOut = news, newsLeftOut = newsLeft;
+  const idxChg = idxNow / (Number(m.indexPrev) || Number(m.index) || idxNow) - 1;
+  let armed = m.circuitArmed !== false;
+  if (idxChg > -0.05) armed = true;
+  if (idxChg <= -0.08 && circuitUntil <= tick && armed) {
+    armed = false;
+    circuitUntil = tick + 10;
+    newsOut = "交易所熔断：指数跌超8% 暂停交易 10 跳";
+    newsLeftOut = 10;
+  }
+
   const out = {
     v: 5, econ: 27, barSec: Number(m.barSec) > 0 ? Number(m.barSec) : DEFAULT_BAR_SEC, tick, running: m.running !== false, vol: volMul,
     autoNews: m.autoNews !== false, speed: clampSpeed(m.speed),
-    limit: m.limit !== false,
-    news, newsLeft, events, history, stocks, steppedAt: Date.now(),
+    limit: m.limit !== false, settleSec: Number(m.settleSec) || 10, circuitUntil: Number(m.circuitUntil) || 0,
+    news: newsOut, newsLeft: newsLeftOut, events, history, stocks, steppedAt: Date.now(), circuitUntil, circuitArmed: armed,
     indexPrev: m.indexPrev ?? m.index ?? 1000
   };
   out.index = indexOf(out);
@@ -728,23 +777,40 @@ export function stepMarket(m) {
 
 // ── 账户：做多股票，T+0，佣金 1%、最低 1 银 ────────────────
 export function newAccount(cash = 0) {
-  return { cash, deposited: cash, realized: 0, positions: {}, pending: [] };
+  return { cash, deposited: cash, realized: 0, positions: {}, pending: [], log: [] };
 }
 
 // 卖出后 T+SETTLE_TICKS 跳才交收：把到期的钱放回现金，返回本次解冻金额
-export function releasePending(acc, tick) {
+export function releasePending(acc, now) {
   const keep = [];
   let sum = 0;
+  const t = Number.isFinite(now) ? now : Date.now();
   for (const p of (acc.pending || [])) {
     if (!p || !Number.isFinite(Number(p.amt))) continue;
-    const due = Number(p.due);
-    // 到期，或 due 丢失，或 due 在遥远未来（快照回滚导致的死结），都当到期处理
-    if (!Number.isFinite(due) || tick >= due || due - tick > 600) sum += Number(p.amt);
-    else keep.push({ amt: Number(p.amt), due });
+    const dueAt = Number(p.dueAt);
+    if (!Number.isFinite(dueAt) || t >= dueAt) sum += Number(p.amt);
+    else keep.push({ amt: Number(p.amt), dueAt });
   }
   acc.pending = keep;
   acc.cash = (Number(acc.cash) || 0) + sum;
   return sum;
+}
+
+// 交收要等多久（毫秒）：基准 10 秒，拥拤/踩踏会拉长
+export const SETTLE_BASE_MS = 10000;
+export function settleDelayMs(st, mkt) {
+  const crowd = Number.isFinite(Number(st && st.crowd)) ? Number(st.crowd) : 50;
+  const panic = crowd < 50 ? (50 - crowd) / 50 : 0;
+  const frenzy = crowd > 50 ? (crowd - 50) / 50 : 0;
+  let mul = 1 + panic * 5 + frenzy * 1.5;
+  const pc = Number(st && st.prevClose), px = Number(st && st.price);
+  if (pc > 0 && px > 0) {
+    const chg = px / pc - 1;
+    if (chg <= -0.09) mul *= 2;
+    else if (chg <= -0.07) mul *= 1.5;
+  }
+  const base = Number(mkt && mkt.settleSec) > 0 ? Number(mkt.settleSec) : 10;
+  return Math.min(180000, Math.round(base * mul * 1000));
 }
 
 export function pendingTotal(acc) {

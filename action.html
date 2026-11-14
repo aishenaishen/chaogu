@@ -97,6 +97,8 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
 .evrow{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:10px;font-size:11.5px;min-height:32px;
   background:#f4f7f5;border:1px solid #e4ebe7;color:#5d6f66}
 .evrow[hidden]{display:none}
+.circuit{display:flex;align-items:center;gap:6px;margin:8px 0 0;padding:8px 12px;border-radius:10px;background:linear-gradient(90deg,#7a1f1a,#b3342a);color:#fff;font-size:12px;font-weight:700;letter-spacing:.3px}
+.circuit[hidden]{display:none}
 .evrow .evtag{font-size:9.5px;font-weight:700;color:#fff;background:#9aa8a1;border-radius:4px;padding:1px 6px;flex:none}
 .evrow .evtxt{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .evrow.news{background:#eef7f1;border-color:#d5ecdd;color:#3f6b55}
@@ -214,7 +216,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
       <span id="actBadge" class="cnt" hidden></span>
-    <span class="ver">v3.13.0</span>
+    <span class="ver">v3.15.0</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -290,7 +292,8 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
             <span class="evtxt" id="evtext">牌价平稳，等城主发话。</span>
           </div>
         </div>
-        <div class="publog" id="publog" hidden>
+        <div id="circuit" class="circuit" hidden></div>
+    <div class="publog" id="publog" hidden>
           <div class="publog-h" id="publogH">事件回溯 · 最近走完的城主事件</div>
           <div class="evlog" id="evlogPub"></div>
         </div>
@@ -322,6 +325,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
           <div class="posline"><span>持仓</span><span id="pLine"><b id="pHold">0</b> 股 · 成本 <b id="pCost">—</b></span></div>
           <div class="posline"><span>待交收</span><span><b id="pPending">0.00</b> 金币</span></div>
           <div class="posline"><span>流动性</span><span id="pLiq">—</span></div>
+          <div class="posline"><span>最近成交</span><span id="pLog" style="font-size:11px;text-align:right">—</span></div>
           <button class="closebtn" id="btnClose" disabled>清仓</button>
           <div class="fhint"><span id="fhintSettle">卖出后 3 跳到账</span>，待交收处显示倒计时。买跌（融券）押 50% 押金，亏光押金自动平仓。</div>
         </section>
@@ -391,12 +395,11 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
       <button class="btn" id="gmSpeedGo">秒 / 跳</button>
     </div>
         <div class="srow"><label>交收</label>
-      <button class="chip" data-settle="1">1 跳</button>
-      <button class="chip" data-settle="2">2 跳</button>
-      <button class="chip" data-settle="3">3 跳</button>
-      <button class="chip" data-settle="6">6 跳</button>
-      <button class="chip" data-settle="12">12 跳</button>
-      <span class="shint">卖出后多少跳才到账</span>
+      <button class="chip" data-setsec="5">5 秒</button>
+      <button class="chip" data-setsec="10">10 秒</button>
+      <button class="chip" data-setsec="20">20 秒</button>
+      <button class="chip" data-setsec="30">30 秒</button>
+      <span class="shint">基准时长；越拥挤越慢，踩踏时可达 60 秒</span>
     </div>
 <div class="srow"><label>随机新闻</label>
       <button class="chip" id="gmAutoNews">开</button>
@@ -500,7 +503,7 @@ import {
   MKT_KEY, ACC_KEY, TICK_MS, STOCKS, stockById, fmt, PRESETS, clampSpeed,
   newMarket, stepMarket, newAccount, equityOf, positionValue, unrealizedOf, feeOf, indexOf, LOT, TRUST_TIERS, trustTier, BAR_SEC_CHOICES, DEFAULT_BAR_SEC,
   SHORT_MARGIN, marginUsed, needsCover, shortLoss,
-  SETTLE_TICKS, releasePending, pendingTotal, addCrowd, clampCrowd, CROWD_NEUTRAL,
+  SETTLE_TICKS, releasePending, pendingTotal, addCrowd, clampCrowd, CROWD_NEUTRAL, settleDelayMs, SETTLE_BASE_MS,
   SEC_PER_TICK, MAX_BARS
 } from "./shared.js";
 
@@ -669,6 +672,7 @@ async function applyMarket(fn) {
   const md = await OBR.room.getMetadata();
   const cur = md[MKT_KEY] || newMarket();
   const next = slimMarket(fn(structuredClone(cur)));
+  metaBytes = JSON.stringify(next).length;
   try {
     // OBR 房间 metadata 总共只有 16kB；写超时/被拒时必须显式失败，否则推进链会卡死
     await Promise.race([
@@ -733,7 +737,7 @@ function cleanAcc(a) {
   out.cash = Number(out.cash) || 0;
   out.pending = Array.isArray(out.pending)
     ? out.pending.filter(p => p && Number.isFinite(Number(p.amt)))
-      .map(p => ({ amt: Number(p.amt), due: Number(p.due) || 0 }))
+      .map(p => ({ amt: Number(p.amt), dueAt: Number(p.dueAt) || 0 }))
     : [];
   out.positions = (out.positions && typeof out.positions === "object") ? out.positions : {};
   for (const id in out.positions) {
@@ -770,7 +774,7 @@ const settleTicks = () => Math.max(1, Math.min(24, Number(mkt && mkt.settle) || 
 
 async function settleUp() {
   if (!mkt || !acc || !acc.pending) return;
-  const got = releasePending(acc, mkt.tick || 0);
+  const got = releasePending(acc, Date.now());
   if (got > 0) {
     await saveAcc();
     render();
@@ -788,7 +792,7 @@ async function settleAll() {
   let total = 0;
   for (const id in all.players) {
     const a = cleanAcc(all.players[id]);
-    const got = releasePending(a, mkt.tick || 0);
+    const got = releasePending(a, Date.now());
     if (got > 0) { all.players[id] = a; total += got; }
   }
   if (total > 0) {
@@ -813,19 +817,18 @@ async function setBalance(playerId, cash) {  if (DEMO) {
 }
 
 /* ---------- 渲染 ---------- */
+function logTrade(side, id, sh, px, fee) {
+  acc.log = (acc.log || []).concat([{ t: (mkt && mkt.tick) || 0, s: side, id, sh, px: Number(px.toFixed(2)), f: Number(fee.toFixed(2)) }]).slice(-20);
+}
 function renderPending() {
   const el = $("#pPending"); if (!el) return;
   const pend = (acc && acc.pending) || [];
   if (!pend.length) { el.textContent = "0.00"; return; }
-  const tick = (mkt && mkt.tick) || 0;
-  const sp = clampSpeed((mkt && mkt.speed) || TICK_MS);
-  const due = Math.min(...pend.map(p => Number(p.due) || 0));
-  const left = Math.max(0, due - tick);
-  const since = mkt && mkt.steppedAt ? Date.now() - mkt.steppedAt : 0;
-  const toNext = Math.max(0, sp - since);
-  const ms = left <= 0 ? 0 : (left - 1) * sp + toNext;
+  const now = Date.now();
+  const next = Math.min(...pend.map(p => Number(p.dueAt) || 0));
+  const ms = Number.isFinite(next) && next > 0 ? Math.max(0, next - now) : 0;
   const sec = Math.ceil(ms / 1000);
-  el.textContent = money(pendingTotal(acc)) + (left > 0 ? ` \u00b7 ${sec} \u79d2\u540e\u5230\u8d26` : " \u00b7 \u5230\u8d26\u4e2d");
+  el.textContent = money(pendingTotal(acc)) + (ms > 0 ? ` \u00b7 ${sec} \u79d2\u540e\u5230\u8d26` : " \u00b7 \u5230\u8d26\u4e2d");
 }
 setInterval(renderPending, 500);
 
@@ -944,12 +947,24 @@ function calc() {
   const im = st ? impactOf(shares, st) : 0;
   const amount = st ? shares * st.price : 0;
   $("#cAmount").textContent = money(amount);
-  const fh = $("#fhintSettle"); if (fh) fh.textContent = "\u5356\u51fa\u540e " + settleTicks() + " \u8df3\u5230\u8d26";
+  const fh = $("#fhintSettle"); if (fh) fh.textContent = "\u5356\u51fa\u540e 10 \u79d2\u8d77\u5230\u8d26\uff08\u8d8a\u62e5\u62e4\u8d8a\u6162\uff09";
+  const plog = $("#pLog");
+  if (plog) {
+    const rows = (acc.log || []).slice(-3).reverse();
+    plog.textContent = rows.length ? rows.map(r => r.s + r.sh + "@" + r.px.toFixed(2)).join("  ") : "—";
+  }
+  const cb = $("#circuit");
+  if (cb) {
+    const left = (Number(mkt.circuitUntil) || 0) - (mkt.tick || 0);
+    if (left > 0) { cb.hidden = false; cb.textContent = "熔断中 · 还剩 " + left + " 跳 · 交易所暂停交易"; }
+    else cb.hidden = true;
+  }
   const liq = $("#pLiq");
   if (liq) {
     const hold = Math.abs((acc.positions[pid] || {}).shares || 0);
     const imTxt = shares ? "本单冲击 ±" + (im * 100).toFixed(2) + "%" : "";
-    liq.innerHTML = (hold ? "卖光 " + liqText(hold, st) + " · " : "") + imTxt;
+    const eta = Math.round(settleDelayMs(st, mkt) / 1000);
+    liq.innerHTML = (hold ? "卖光 " + liqText(hold, st) + " · " : "") + imTxt + (shares ? ' · 预计 <b>' + eta + '</b> 秒到账' : "");
   }
   $("#cFee").textContent = money(amount ? feeOf(amount) : 0);
   $("#cCash").textContent = money(acc.cash - marginUsed(acc));
@@ -1215,20 +1230,23 @@ async function trade(action) {
     acc.positions[pid] = p;
     await saveAcc(); render(); refreshHeld();
     await noteFlow(shares);
-    SFX.buy(); return toast("买入 " + shares + " 股 · 佣金 " + money(fee));
+    logTrade("买", pid, shares, buyPx, fee); await saveAcc(); render();
+  SFX.buy(); return toast("买入 " + shares + " 股 · 佣金 " + money(fee));
   }
 
   if (action === "sell") {
     if (!pos || pos.shares < shares) return toast("手上没有这么多股。");
     const net = amount - fee;
     acc.pending = acc.pending || [];
-    acc.pending.push({ amt: net, due: (mkt.tick || 0) + settleTicks() });
+    const waitMs = settleDelayMs(st, mkt);
+    acc.pending.push({ amt: net, dueAt: Date.now() + waitMs });
     acc.realized += (sellPx - pos.cost) * shares - fee;
     pos.shares -= shares;
     if (pos.shares === 0) delete acc.positions[pid];
     await saveAcc(); render(); refreshHeld();
     await noteFlow(-shares * (1 + im * 3));
-    SFX.sell(); return toast("卖出 " + shares + " 股 · " + money(net) + " 金 " + settleTicks() + " 跳后到账");
+    logTrade("卖", pid, shares, sellPx, fee); await saveAcc(); render();
+  SFX.sell(); return toast("卖出 " + shares + " 股 · " + money(net) + " 金 " + Math.round(waitMs / 1000) + " 秒后到账");
   }
 
   if (action === "short") {
@@ -1254,7 +1272,8 @@ async function trade(action) {
     acc.positions[pid] = p;
     await saveAcc(); render(); refreshHeld();
     await noteFlow(-shares * (1 + im * 3));
-    SFX.short(); return toast("买跌 " + shares + " 股 · 押金 " + money(margin) + " · 跌了赚，涨了亏");
+    logTrade("空", pid, shares, st.price, fee); await saveAcc(); render();
+  SFX.short(); return toast("买跌 " + shares + " 股 · 押金 " + money(margin) + " · 跌了赚，涨了亏");
   }
 
   // cover：买回空单
@@ -1267,6 +1286,7 @@ async function trade(action) {
   if (pos.shares === 0) delete acc.positions[pid];
   await saveAcc(); render(); refreshHeld();
   await noteFlow(shares);
+  logTrade("平空", pid, shares, buyPx, fee); await saveAcc(); render();
   SFX.cover(); toast("平空 " + shares + " 股 · " + (pnl >= 0 ? "赚 " : "亏 ") + money(Math.abs(pnl)));
 }
 
@@ -1303,7 +1323,8 @@ async function closeAll() {
   const pnl = pos.shares > 0 ? (px - pos.cost) * n - fee : (pos.cost - px) * n - fee;
   if (pos.shares > 0) {
     acc.pending = acc.pending || [];
-    acc.pending.push({ amt: amount - fee, due: (mkt.tick || 0) + settleTicks() });
+    const waitMs2 = settleDelayMs(st, mkt);
+    acc.pending.push({ amt: amount - fee, dueAt: Date.now() + waitMs2 });
   } else {
     acc.cash -= amount + fee;
   }
@@ -1311,7 +1332,8 @@ async function closeAll() {
   delete acc.positions[pid];
   await saveAcc(); render(); refreshHeld();
   await noteFlow(pos.shares > 0 ? -n : n);
-  if (pos && pos.shares > 0) SFX.sell(); else SFX.cover(); toast((pos.shares > 0 ? "已卖出，钱 " + settleTicks() + " 跳后到账" : "已平空") + " · 佣金 " + money(fee));
+  logTrade(pos.shares > 0 ? "清仓" : "平空", pid, n, px, fee); await saveAcc(); render();
+  if (pos && pos.shares > 0) SFX.sell(); else SFX.cover(); toast((pos.shares > 0 ? "已卖出，钱 " + Math.round(waitMs2 / 1000) + " 秒后到账" : "已平空") + " · 佣金 " + money(fee));
 }
 
 /* ---------- GM ---------- */
@@ -1331,9 +1353,9 @@ function gmSync() {
   $("#gmRunState").textContent = run ? "每 " + (sp / 1000) + " 秒一跳" : "已冻结";
   document.querySelectorAll("[data-speed]").forEach(b =>
     b.classList.toggle("on", Number(b.dataset.speed) === sp));
-  const stl = Math.max(1, Number(mkt.settle) || SETTLE_TICKS);
-  document.querySelectorAll("[data-settle]").forEach(b =>
-    b.classList.toggle("on", Number(b.dataset.settle) === stl));
+  const ssec = Number(mkt.settleSec) || 10;
+  document.querySelectorAll("[data-setsec]").forEach(b =>
+    b.classList.toggle("on", Number(b.dataset.setsec) === ssec));
   if (document.activeElement !== $("#gmSpeed")) $("#gmSpeed").value = String(sp / 1000);
   document.querySelectorAll("[data-vol]").forEach(b =>
     b.classList.toggle("on", Math.abs(Number(b.dataset.vol) - (mkt.vol || 1)) < 0.01));
@@ -1385,7 +1407,7 @@ function gmSync() {
     } catch (e) { log.textContent = "回溯渲染失败：" + e.message; }
   }
   const dbg = $("#gmDbg");
-  if (dbg) dbg.textContent = `tick ${mkt.tick || 0} · 事件 ${(mkt.events || []).length} 条 · 行情${mkt.running === false ? "已暂停" : "在跑"} · 最近推进：${mkt.lastBy || "未知"}`;
+  if (dbg) dbg.textContent = `tick ${mkt.tick || 0} · 事件 ${(mkt.events || []).length} 条 · 行情${mkt.running === false ? "已暂停" : "在跑"} · 最近推进：${mkt.lastBy || "未知"} · 行情体积 ${(metaBytes / 1024).toFixed(1)}kB`;
 }
 
 async function refreshPlayers() {
@@ -1481,8 +1503,29 @@ function fireEvent(ev) {
       if (tk === "evil") st.trustCeil = Math.min(Number(st.trustCeil) || 32, 32, st.trust);
       trust[id] = d;
     }
-    m.events = (m.events || []).concat([{ ...ev, ticks, mins, tickMs: sp, trust, start, left: ticks, id: "ev-" + Date.now().toString(36) }]);
-    if (ev.crowd) addCrowd(m, Object.keys(ev.imp || {}), ev.crowd);
+    // 同一只股票的城主事件累计幅度封顶 35%，避免一把打到地板
+    const CAP = 0.35;
+    const used = {};
+    for (const e of (m.events || [])) {
+      if (!e.free) continue;
+      for (const id in (e.imp || {})) used[id] = (used[id] || 0) + (Number(e.imp[id]) || 0) / 100;
+    }
+    const imp = {};
+    for (const id in (ev.imp || {})) {
+      const add = (Number(ev.imp[id]) || 0) / 100;
+      if (!Number.isFinite(add) || !add) continue;
+      const u = used[id] || 0;
+      const room = Math.max(0, CAP - Math.abs(u));
+      let v = add;
+      if (add > 0 && (u >= CAP)) continue;
+      if (add < 0 && (u <= -CAP)) continue;
+      if (Math.abs(add) > room) v = Math.sign(add) * room;
+      if (v) imp[id] = Math.round(v * 1000) / 10;
+    }
+    if (Object.keys(imp).length) {
+      m.events = (m.events || []).concat([{ ...ev, imp, ticks, mins, tickMs: sp, trust, start, left: ticks, id: "ev-" + Date.now().toString(36) }]);
+    }
+    if (ev.crowd) addCrowd(m, Object.keys(imp).length ? Object.keys(imp) : Object.keys(ev.imp || {}), ev.crowd);
     m.news = ev.title + (ev.desc ? "：" + ev.desc : "");
     m.newsLeft = Math.max(6, Math.min(ticks, 120));
     return m;
@@ -1608,11 +1651,11 @@ async function setSpeed(ms) {
 document.querySelectorAll("[data-speed]").forEach(b => {
   b.onclick = () => setSpeed(Number(b.dataset.speed));
 });
-document.querySelectorAll("[data-settle]").forEach(b => b.onclick = async () => {
-  const v = Number(b.dataset.settle) || SETTLE_TICKS;
-  await applyMarket(m => { m.settle = v; return m; });
+document.querySelectorAll("[data-setsec]").forEach(b => b.onclick = async () => {
+  const v = Math.max(3, Math.min(60, Number(b.dataset.setsec) || 10));
+  await applyMarket(m => { m.settleSec = v; return m; });
   gmSync(); render();
-  toast("交收改为 " + v + " 跳后到账。");
+  toast("交收基准改为 " + v + " 秒。");
 });
 $("#gmSpeedGo").onclick = () => setSpeed((Number($("#gmSpeed").value) || 5) * 1000);
 document.querySelectorAll("[data-vol]").forEach(b => {
@@ -1686,7 +1729,7 @@ $("#gmResetMkt").onclick = () => arm($("#gmResetMkt"), async () => {
     const m = newMarket();
     m.tick = tk;
     m.speed = clampSpeed(sp); m.vol = vol; m.limit = lim; m.autoNews = an;
-    m.settle = settleTicks();
+    m.settleSec = Number(mkt && mkt.settleSec) || 10;
     m.barSec = Number(mkt && mkt.barSec) || DEFAULT_BAR_SEC;
     m.lastBy = "重置";
     m.steppedAt = Date.now();
@@ -1699,6 +1742,15 @@ $("#gmResetMkt").onclick = () => arm($("#gmResetMkt"), async () => {
   SFX.reset(); toast("六只股票已重置回发行价。");
 });
 const SNAP_KEY = "gx-snapshot";
+async function autoSnap() {
+  try {
+    if (DEMO) return;
+    const md = await OBR.room.getMetadata();
+    if (!hasStocks(md[MKT_KEY])) return;
+    localStorage.setItem(SNAP_KEY, JSON.stringify({ at: Date.now(), market: md[MKT_KEY], accounts: md[ACC_KEY] || null, auto: true }));
+    snapInfo();
+  } catch (e) { /* 存不下就算了，不打扰带团 */ }
+}
 function snapInfo() {
   const el = $("#gmSnapInfo");
   try {
@@ -1921,9 +1973,11 @@ async function connect() {
   toast("已连上 Owlbear，行情由你的面板推进（关掉面板后由后台接手）。");
 }
 
-window.__diag = () => ({ tick: mkt && mkt.tick, isGM, DEMO, driver: !!driverTimer, speed: mkt && mkt.speed, steppedAgo: mkt && mkt.steppedAt ? Date.now() - mkt.steppedAt : null, running: mkt && mkt.running, lastBy: mkt && mkt.lastBy, hist: mkt && (mkt.history || []).length, evs: mkt && (mkt.events || []).map(e => [e.title.slice(0,4), e.left, e.ticks]) });
+window.__setCircuit = () => { if (mkt) { mkt.circuitUntil = (mkt.tick || 0) + 8; render(); } };
+  window.__diag = () => ({ tick: mkt && mkt.tick, isGM, DEMO, driver: !!driverTimer, speed: mkt && mkt.speed, steppedAgo: mkt && mkt.steppedAt ? Date.now() - mkt.steppedAt : null, running: mkt && mkt.running, lastBy: mkt && mkt.lastBy, hist: mkt && (mkt.history || []).length, evs: mkt && (mkt.events || []).map(e => [e.title.slice(0,4), e.left, e.ticks]) });
 let driverTimer = null;
 let chartBack = 0;
+let metaBytes = 0;
 let actAs = "";                 // GM 代客下单：空=自己，否则是玩家 id
 const accPid = () => actAs || myId;
 function paintActBadge() {
@@ -1946,6 +2000,7 @@ function updateDriver() {
         await applyMarket(m => { const n = stepMarket(m); n.lastBy = "面板"; return n; });
         checkMargin();
         await settleAll();
+        if (isGM && mkt && mkt.tick % 30 === 0) autoSnap();
       }
     } catch (e) { /* 写失败：下一拍再试 */ }
     finally {
