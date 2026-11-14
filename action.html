@@ -224,7 +224,7 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
     <div><div class="t">金手指证券交易所</div><div class="s">GOLDEN EXCHANGE</div></div>
     <div class="who">账房 · 老雅诺</div>
       <span id="actBadge" class="cnt" hidden></span>
-    <span class="ver">v3.17.0</span>
+    <span class="ver">v3.18.0</span>
     <span class="grow"></span>
     <div class="pill" id="modePill"><i></i>试算盘</div>
     <button class="ghost gm" id="btnGM" style="display:none">GM 控制台</button>
@@ -410,9 +410,12 @@ main{flex:1;min-height:0;display:flex;flex-direction:column;gap:11px;padding:12p
       <button class="chip" data-setsec="30">30 秒</button>
       <span class="shint">基准时长；越拥挤越慢，踩踏时可达 60 秒</span>
     </div>
-<div class="srow"><label>随机新闻</label>
-      <button class="chip" id="gmAutoNews">开</button>
-      <span class="shint">开：每跳 3% 概率蹦一条随机快讯并小幅冲击</span>
+<div class="srow"><label>快讯</label>
+      <button class="chip" data-news="0">关</button>
+      <button class="chip" data-news="1">少</button>
+      <button class="chip" data-news="2">正常</button>
+      <button class="chip" data-news="3">多</button>
+      <span class="shint">八卦/传闻的频率；越多人越热闹，单条影响仍很小</span>
     </div>
 
     <div class="sep"></div>
@@ -1399,8 +1402,8 @@ function gmSync() {
   if (document.activeElement !== $("#gmSpeed")) $("#gmSpeed").value = String(sp / 1000);
   document.querySelectorAll("[data-vol]").forEach(b =>
     b.classList.toggle("on", Math.abs(Number(b.dataset.vol) - (mkt.vol || 1)) < 0.01));
-  $("#gmAutoNews").textContent = mkt.autoNews !== false ? "开" : "关";
-  $("#gmAutoNews").classList.toggle("on", mkt.autoNews !== false);
+  const nr = Number(mkt.newsRate ?? 2);
+  document.querySelectorAll("[data-news]").forEach(b => b.classList.toggle("on", Number(b.dataset.news) === nr));
   $("#gmLimit").classList.toggle("on", mkt.limit !== false);
   const s = stockById($("#gmStock").value || pid);
   const st = mkt.stocks[s.id];
@@ -1691,7 +1694,10 @@ $("#gmSpeedGo").onclick = () => setSpeed((Number($("#gmSpeed").value) || 5) * 10
 document.querySelectorAll("[data-vol]").forEach(b => {
   b.onclick = () => applyMarket(m => { m.vol = Number(b.dataset.vol); return m; });
 });
-$("#gmAutoNews").onclick = () => applyMarket(m => { m.autoNews = m.autoNews === false; return m; });
+document.querySelectorAll("[data-news]").forEach(b => b.onclick = () => {
+  const v = Number(b.dataset.news);
+  applyMarket(m => { m.newsRate = v; m.autoNews = v > 0; return m; });
+});
 $("#gmReopen").onclick = () => applyMarket(m => {
   for (const s of STOCKS) { const st = m.stocks[s.id]; st.prevClose = st.price; }
   m.indexPrev = m.index; return m;
@@ -1754,12 +1760,12 @@ $("#gmSettleAll").onclick = async () => {
 
 $("#gmResetMkt").onclick = () => arm($("#gmResetMkt"), async () => {
   const sp = mkt?.speed ?? TICK_MS, vol = mkt?.vol ?? 1;
-  const lim = mkt?.limit !== false, an = mkt?.autoNews !== false;
+  const lim = mkt?.limit !== false, an = mkt?.autoNews !== false, nr = Number(mkt?.newsRate ?? 2);
   const tk = mkt?.tick || 0;   // 保留跳数，免得待交收的钱永远不到账
   await applyMarket(() => {
     const m = newMarket();
     m.tick = tk;
-    m.speed = clampSpeed(sp); m.vol = vol; m.limit = lim; m.autoNews = an;
+    m.speed = clampSpeed(sp); m.vol = vol; m.limit = lim; m.autoNews = an; m.newsRate = nr;
     m.settleSec = Number(mkt && mkt.settleSec) || 10;
     m.barSec = Number(mkt && mkt.barSec) || DEFAULT_BAR_SEC;
     m.lastBy = "重置";
